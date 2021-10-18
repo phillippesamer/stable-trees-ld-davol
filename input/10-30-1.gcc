@@ -1,0 +1,44 @@
+# GCCLib - Graphs with Conflict Constraints Library
+# Random instances for problems on graphs with a set of conflicting edge pairs.
+#
+# \author P. Samer <samer@dcc.ufmg.br>
+# \author S. Urrutia <surrutia@dcc.ufmg.br>
+#
+# \date October 4, 2012
+#
+10-30-1.gcc
+10
+30
+1
+0 1 426
+0 3 839
+0 4 513
+0 5 659
+0 7 4
+0 9 634
+1 2 925
+1 3 376
+1 5 151
+1 6 135
+1 7 734
+1 8 148
+2 3 530
+2 6 16
+2 8 652
+2 9 41
+3 4 202
+3 5 717
+3 7 158
+3 8 997
+3 9 232
+4 5 412
+4 6 559
+5 6 659
+5 7 313
+5 8 627
+5 9 712
+6 8 280
+6 9 390
+7 8 784
+1 2 3 8
+
