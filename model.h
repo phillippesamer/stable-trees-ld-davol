@@ -29,6 +29,8 @@ private:
 
 public:
     Model(IO*, int);
+    ~Model();
+    
     int solve();
     int solve_lp_relax();
     bool check_half_integer_solution();

@@ -144,6 +144,13 @@ Model::Model(IO *instance, int cardinality)
     }
 }
 
+Model::~Model()
+{
+    delete[] x;
+    delete model;
+    delete env;
+}
+
 int Model::solve()
 {
     try
@@ -186,13 +193,13 @@ int Model::solve_lp_relax()
         model->getEnv().set(GRB_IntParam_Method, 0);
         model->getEnv().set(GRB_IntParam_Symmetry, 0);
         model->getEnv().set(GRB_DoubleParam_PreSOS1BigM, 0);
-        model->getEnv().set(GRB_StringParam_ResultFile, "solution.sol");
+        //model->getEnv().set(GRB_StringParam_ResultFile, "solution.sol");
 
         //for (int i=0; i < instance->num_vertices; ++i)
         for (int i=0; i < instance->num_edges; ++i)
             x[i].set(GRB_CharAttr_VType, GRB_CONTINUOUS);
 
-        model->write("k-stab.lp");
+        //model->write("mstcc.lp");
         model->optimize();
         return model->get(GRB_IntAttr_SolCount);
     }

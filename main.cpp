@@ -1,9 +1,12 @@
 #include "io.h"
 #include "model.h"
 
+#include <lemon/list_graph.h>
+
 #include <cstdlib>
 
 using namespace std;
+using namespace lemon;
 
 int main(int argc, char **argv)
 {
