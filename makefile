@@ -1,4 +1,5 @@
 CC		    = g++ -Wall -O3 -m64 -lemon
+CC_DEBUG    = g++ -Wall -O0 -m64 -lemon -g
 FILES_CC	= io.cpp model.cpp main.cpp
 BINARY		= ldla
 
@@ -19,3 +20,6 @@ clean:
 
 compile:
 	$(CC)  -o $(BINARY)  $(FILES_CC)  $(GRB_INCLUDE)  $(GRB_LINK)
+
+debug:
+	$(CC_DEBUG)  -o $(BINARY)  $(FILES_CC)  $(GRB_INCLUDE)  $(GRB_LINK)
