@@ -19,6 +19,102 @@ bool lemon_test_adj(ListGraph &g, ListGraph::Node &x, ListGraph::Node &y)
     return false;
 }
 
+int lemon_contract_dropping_parallel_edges(ListGraph &g, ListGraph::EdgeMap<long> &w, ListGraph::Node &x, ListGraph::Node &y)
+{
+    long deleted_edges = 0;
+    vector<ListGraph::Edge> to_be_deleted;
+    
+    #ifdef DEBUG
+    cout << "contracting edge {" << g.id(x) << "," << g.id(y) << "}" << endl;
+    #endif
+    
+    // traverses both neighbourhoods searching for common neighbours
+    for (ListGraph::IncEdgeIt edge_from_x(g,x); edge_from_x != INVALID; ++edge_from_x)
+    {
+        // other end of this edge is not y
+        if ( g.id(g.u(edge_from_x)) != g.id(y) && g.id(g.v(edge_from_x)) != g.id(y) )
+        {
+            // let z be the other end of this edge {x,z}
+            #ifdef DEBUG
+            cout << "edge {" << g.id(g.u(edge_from_x)) << "," << g.id(g.v(edge_from_x)) << "}, of weight " << w[edge_from_x] << "... so z=";
+            #endif
+            
+            ListGraph::Node z = g.id(g.u(edge_from_x)) != g.id(x) ? g.u(edge_from_x) : g.v(edge_from_x) ;
+            
+            #ifdef DEBUG
+            cout << g.id(z) << " - ";
+            #endif
+
+            // search for z in N(y)
+            bool z_neighbour_of_y = false;
+            ListGraph::IncEdgeIt edge_from_y(g,y);
+            while (edge_from_y != INVALID && !z_neighbour_of_y)
+            {
+                // let w be the other end of this edge {y,w}
+                ListGraph::Node w = g.id(g.u(edge_from_y)) != g.id(y) ? g.u(edge_from_y) : g.v(edge_from_y) ;
+                if ( g.id(z) == g.id(w) )
+                    z_neighbour_of_y = true;
+                else
+                    ++edge_from_y;
+            }
+
+            if (z_neighbour_of_y)
+            {
+                #ifdef DEBUG
+                cout << "also a neighbour from y!" << endl;
+                cout << "edge {" << g.id(g.u(edge_from_y)) << "," << g.id(g.v(edge_from_y)) << "}, of weight " << w[edge_from_y] << "... ";
+                #endif
+                
+                if (w[edge_from_y] >= w[edge_from_x])
+                {
+                    #ifdef DEBUG
+                    cout << "deleted!" << endl;
+                    #endif
+                    
+                    to_be_deleted.push_back(edge_from_y);
+                }
+                else
+                {
+                    #ifdef DEBUG
+                    cout << "kept!" << endl;
+                    #endif
+
+                    to_be_deleted.push_back(edge_from_x);
+                }
+                ++deleted_edges;
+            }
+            else
+            {
+                #ifdef DEBUG
+                cout << "not a neighour from y" << endl;
+                #endif
+            }
+        }
+    }
+
+    // delete parallel edges of larger costs
+    #ifdef DEBUG
+    cout << "deleting " << deleted_edges << "=" << to_be_deleted.size() << " edges:" << endl;
+    #endif
+
+    for (long i=0; i<deleted_edges; ++i)
+    {
+        #ifdef DEBUG
+        cout << "- {" << g.id(g.u(to_be_deleted[i])) << "," << g.id(g.v(to_be_deleted[i])) << "}, weight " << w[to_be_deleted[i]] << endl;
+        #endif
+
+        g.erase(to_be_deleted[i]);
+    }
+
+    #ifdef DEBUG
+    cout << "done!" << endl;
+    #endif
+
+    g.contract(x, y, true);
+
+    return deleted_edges;
+}
+
 int main()
 {
     long num_vertices = 5;
@@ -117,9 +213,10 @@ int main()
             l_graph_2.erase(e);
     */
 
-    cout << "contracting edge {" << l_graph_2.id(nr[l_vertices[3]]) << "," << l_graph_2.id(nr[l_vertices[2]]) << "}" << endl;
-    l_graph_2.contract(nr[l_vertices[3]], nr[l_vertices[2]], false);
-
+    cout << "contracting original edge {" << l_graph_2.id(nr[l_vertices[3]]) << "," << l_graph_2.id(nr[l_vertices[2]]) << "}" << endl;
+    //l_graph_2.contract(nr[l_vertices[3]], nr[l_vertices[2]], false);
+    lemon_contract_dropping_parallel_edges(l_graph_2, l_weight_2, nr[l_vertices[3]], nr[l_vertices[2]]);
+    lemon_contract_dropping_parallel_edges(l_graph_2, l_weight_2, nr[l_vertices[1]], nr[l_vertices[0]]);
 
     cout << "n_2 = " << countNodes(l_graph_2) << endl;
     cout << "m_2 = " << countEdges(l_graph_2) << endl;
