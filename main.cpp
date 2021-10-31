@@ -10,9 +10,9 @@ using namespace lemon;
 
 int main(int argc, char **argv)
 {
-    if (argc != 3)
+    if (argc != 2)
     {
-        cout << "usage: \t" << argv[0] << " [input graph file] fixed-cardinality" << endl << endl;
+        cout << "usage: \t" << argv[0] << " [input file]" << endl << endl;
         return 0;
     }
 
@@ -26,7 +26,7 @@ int main(int argc, char **argv)
         return 0;
     }
 
-    Model *model = new Model(data, atoi(argv[2]));
+    Model *model = new Model(data);
     int solutions_count = model->solve_lp_relax();
     if (solutions_count > 0)
     {

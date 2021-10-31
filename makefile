@@ -1,6 +1,6 @@
 CC		    = g++ -Wall -O3 -m64 -lemon
-CC_DEBUG    = g++ -Wall -O0 -m64 -lemon -g
-FILES_CC	= io.cpp model.cpp main.cpp
+CC_DEBUG    = g++ -Wall -O0 -m64 -lemon -Wextra -g -DDEBUG
+FILES_CC	= graph.cpp io.cpp model.cpp main.cpp
 BINARY		= ldla
 
 UNAME_S := $(shell uname -n)
@@ -12,7 +12,8 @@ else
     GRB_LINK    = -L/opt/gurobi912/linux64/lib/ -lgurobi_g++5.2 -lgurobi91 -lm
 endif
 
-all:	clean compile
+all:   clean compile
+debug: clean compile_debug
 
 clean:
 	find . -name '*.o' -exec rm -f '{}' ';'
@@ -21,5 +22,5 @@ clean:
 compile:
 	$(CC)  -o $(BINARY)  $(FILES_CC)  $(GRB_INCLUDE)  $(GRB_LINK)
 
-debug:
+compile_debug:
 	$(CC_DEBUG)  -o $(BINARY)  $(FILES_CC)  $(GRB_INCLUDE)  $(GRB_LINK)
