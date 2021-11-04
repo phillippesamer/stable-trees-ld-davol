@@ -12,6 +12,7 @@ IO::~IO()
 {
     delete graph;
     conflicts.clear();
+    conflict_graph_adj_list.clear();
 }
 
 // parse GCCLib instance file
@@ -98,7 +99,7 @@ bool IO::parse_gcclib(const char *filename)
             
             long e1_index = graph->index_matrix[a][b];
             long e2_index = graph->index_matrix[c][d];
-            
+
             // should never happen
             if (e1_index<0 || e2_index<0)
             {

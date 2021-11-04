@@ -44,7 +44,18 @@ int main(int argc, char **argv)
     }
     cout << endl;
 
-    model->probe_var_at_one(5);
+    long i = 13;
+    pair<ProbeStatus,double> probing = model->probe_var_at_one(i);
+    if (probing.first == PROBE_OPTIMAL)
+    {
+        cout << "probing var x[" << i << "] = 1 gives ObjVal=" << probing.second 
+        << " (runtime: " << model->runtime() << " s)" << endl;
+    }
+    else if (probing.first == PROBE_INFEASIBLE)
+    {
+        cout << "probing var x[" << i << "] = 1 gives an infeasible model" 
+        << " (runtime: " << model->runtime() << " s)" << endl;
+    }
 
     delete instance;
     delete model;
