@@ -30,32 +30,19 @@ int main(int argc, char **argv)
     cout << endl;
     for (long i=0; i < instance->num_edges(); i++)
     {
-        pair<ProbeStatus,double> probing = model->probe_var_at_zero(i);
+        pair<ProbeStatus,double> probing = model->probe_var(i,1);
         if (probing.first == PROBE_OPTIMAL)
         {
-            cout << "probing var x[" << i << "] = 0 gives ObjVal=" << probing.second 
+            cout << "probing var x[" << i << "] = 1 gives ObjVal=" << probing.second 
             << " (runtime: " << model->runtime() << " s)" << endl;
         }
         else if (probing.first == PROBE_INFEASIBLE)
         {
-            cout << "probing var x[" << i << "] = 0 gives an infeasible model" 
+            cout << "probing var x[" << i << "] = 1 gives an infeasible model" 
             << " (runtime: " << model->runtime() << " s)" << endl;
         }
     }
     cout << endl;
-
-    long i = 13;
-    pair<ProbeStatus,double> probing = model->probe_var_at_one(i);
-    if (probing.first == PROBE_OPTIMAL)
-    {
-        cout << "probing var x[" << i << "] = 1 gives ObjVal=" << probing.second 
-        << " (runtime: " << model->runtime() << " s)" << endl;
-    }
-    else if (probing.first == PROBE_INFEASIBLE)
-    {
-        cout << "probing var x[" << i << "] = 1 gives an infeasible model" 
-        << " (runtime: " << model->runtime() << " s)" << endl;
-    }
 
     delete instance;
     delete model;

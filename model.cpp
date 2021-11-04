@@ -122,19 +122,41 @@ double Model::runtime()
     return model->get(GRB_DoubleAttr_Runtime);
 }
 
-pair<ProbeStatus,double> Model::probe_var_at_zero(long var_idx)
+pair<ProbeStatus,double> Model::probe_var(long probe_idx, long probe_value)
 {
-    // change var: continuous, lb=ub=0
-    x[var_idx].set(GRB_CharAttr_VType, GRB_CONTINUOUS);
-    x[var_idx].set(GRB_DoubleAttr_LB, 0);
-    x[var_idx].set(GRB_DoubleAttr_UB, 0);
+    // change given var to continuous and update lb=ub
+    x[probe_idx].set(GRB_CharAttr_VType, GRB_CONTINUOUS);
+    x[probe_idx].set(GRB_DoubleAttr_LB, probe_value);
+    x[probe_idx].set(GRB_DoubleAttr_UB, probe_value);
+
+    /*
+    #ifdef DEBUG
+        cout << "fixed x[" << probe_idx << "] = " << probe_value << endl;
+    #endif
+    */
+
+    // if fixing at 1, change vars corresponding to neighbours: continuous, lb=ub=0
+    if (probe_value > 0)
+    {
+        for (list<long>::iterator it = instance->conflict_graph_adj_list[probe_idx].begin(); 
+             it != instance->conflict_graph_adj_list[probe_idx].end(); ++it)
+        {
+            x[*it].set(GRB_CharAttr_VType, GRB_CONTINUOUS);
+            x[*it].set(GRB_DoubleAttr_LB, 0);
+            x[*it].set(GRB_DoubleAttr_UB, 0);
+
+            /*
+            #ifdef DEBUG
+                cout << "fixed x[" << *it << "] at zero" << endl;
+            #endif
+            */
+        }
+    }
 
     model->update();
 
     /*
     #ifdef DEBUG
-        cout << endl << endl << "x[" << var_idx << "] now set to VType=" << 
-            x[var_idx].get(GRB_CharAttr_VType) << " (see .lp file!)" << endl;
         model->write("kstab_2.lp");
     #endif
     */
@@ -158,96 +180,31 @@ pair<ProbeStatus,double> Model::probe_var_at_zero(long var_idx)
         result = numeric_limits<double>::max();
     }
     else
-        cout << "Unexpected error: probe_var_at_zero got neither optimal nor infeasible model" << endl;
+        cout << "Unexpected error: probe_var(idx=" << probe_idx << ", value=" << probe_value << ") got neither optimal nor infeasible model" << endl;
 
-    // restore original var: binary, lb=0, ub=1
-    x[var_idx].set(GRB_DoubleAttr_LB, 0);
-    x[var_idx].set(GRB_DoubleAttr_UB, 1);
-    x[var_idx].set(GRB_CharAttr_VType, GRB_BINARY);
+    // restore all variables: binary, lb=0, ub=1
+    x[probe_idx].set(GRB_DoubleAttr_LB, 0);
+    x[probe_idx].set(GRB_DoubleAttr_UB, 1);
+    x[probe_idx].set(GRB_CharAttr_VType, GRB_BINARY);
+
+    if (probe_value > 0)
+    {
+        for (list<long>::iterator it = instance->conflict_graph_adj_list[probe_idx].begin(); 
+             it != instance->conflict_graph_adj_list[probe_idx].end(); ++it)
+        {
+            x[*it].set(GRB_DoubleAttr_LB, 0);
+            x[*it].set(GRB_DoubleAttr_UB, 1);
+            x[*it].set(GRB_CharAttr_VType, GRB_BINARY);
+        }
+    }
 
     model->update();
 
     /*
     #ifdef DEBUG
-        cout << endl << "x[" << var_idx << "] set back to VType=" << 
-            x[var_idx].get(GRB_CharAttr_VType) << " (see .lp file!)" << endl;
         model->write("kstab_3.lp");
     #endif
     */
 
     return make_pair(status,result);
 }
-
-pair<ProbeStatus,double> Model::probe_var_at_one(long var_idx)
-{
-    // change given var: continuous, lb=ub=1
-    x[var_idx].set(GRB_CharAttr_VType, GRB_CONTINUOUS);
-    x[var_idx].set(GRB_DoubleAttr_LB, 1);
-    x[var_idx].set(GRB_DoubleAttr_UB, 1);
-
-    #ifdef DEBUG
-        cout << "fixed x[" << var_idx << "] at one" << endl;
-    #endif
-
-    // change vars corresponding to neighbours: continuous, lb=ub=0
-    for (list<long>::iterator it = instance->conflict_graph_adj_list[var_idx].begin(); 
-         it != instance->conflict_graph_adj_list[var_idx].end(); ++it)
-    {
-        x[*it].set(GRB_CharAttr_VType, GRB_CONTINUOUS);
-        x[*it].set(GRB_DoubleAttr_LB, 0);
-        x[*it].set(GRB_DoubleAttr_UB, 0);
-
-        #ifdef DEBUG
-            cout << "fixed x[" << *it << "] at zero" << endl;
-        #endif
-    }
-
-    model->update();
-
-    #ifdef DEBUG
-        model->write("kstab_2.lp");
-    #endif
-
-    //model->set(GRB_IntParam_OutputFlag, 0);
-    model->optimize();
-    //model->set(GRB_IntParam_OutputFlag, 1);
-
-    // save optimization status (optimal/infeasible) and result, if optimal
-    ProbeStatus status = PROBE_UNKNOWN;
-    double result = numeric_limits<double>::max();
-
-    if (model->get(GRB_IntAttr_Status) == GRB_OPTIMAL)
-    {
-        status = PROBE_OPTIMAL;
-        result = model->get(GRB_DoubleAttr_ObjVal);
-    }
-    else if (model->get(GRB_IntAttr_Status) == GRB_INFEASIBLE)
-    {
-        status = PROBE_INFEASIBLE;
-        result = numeric_limits<double>::max();
-    }
-    else
-        cout << "Unexpected error: probe_var_at_one got neither optimal nor infeasible model" << endl;
-
-    // restore all variables: binary, lb=0, ub=1
-    x[var_idx].set(GRB_DoubleAttr_LB, 0);
-    x[var_idx].set(GRB_DoubleAttr_UB, 1);
-    x[var_idx].set(GRB_CharAttr_VType, GRB_BINARY);
-
-    for (list<long>::iterator it = instance->conflict_graph_adj_list[var_idx].begin(); 
-         it != instance->conflict_graph_adj_list[var_idx].end(); ++it)
-    {
-        x[*it].set(GRB_DoubleAttr_LB, 0);
-        x[*it].set(GRB_DoubleAttr_UB, 1);
-        x[*it].set(GRB_CharAttr_VType, GRB_BINARY);
-    }
-
-    model->update();
-
-    #ifdef DEBUG
-        model->write("kstab_3.lp");
-    #endif
-
-    return make_pair(status,result);
-}
-

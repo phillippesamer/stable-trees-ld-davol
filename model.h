@@ -35,8 +35,7 @@ public:
     int solve();
     double runtime();
 
-    pair<ProbeStatus,double> probe_var_at_zero(long);
-    pair<ProbeStatus,double> probe_var_at_one(long);
+    pair<ProbeStatus,double> probe_var(long, long);
 
 private:
     IO *instance;
