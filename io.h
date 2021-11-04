@@ -11,7 +11,17 @@
 
 using namespace std;
 
-/// input and output functionality; includes a Graph object for main data structures
+/***
+ * \file io.h
+ * 
+ * Module for input and output functionality, including a Graph object for
+ * main data structures.
+ * 
+ * Model is declared a friend to avoid cumbersome get/set methods.
+ * 
+ * \author Phillippe Samer <phillippes@gmail.com>
+ * \date 02.11.2021
+ */
 class IO
 {
 public:
@@ -19,6 +29,8 @@ public:
     ~IO();
     
     bool parse_gcclib(const char *);
+    long num_vertices() { return graph->num_vertices; }
+    long num_edges() { return graph->num_edges; }
     
 private:
     friend class Model;
@@ -27,9 +39,11 @@ private:
     long num_conflicts;
     string instance_id;
 
-    Graph *graph;  // object with different graph representations
+    Graph *graph;  // different representations of the original graph
 
     vector< pair<long,long> > conflicts;  // conflicting edges (indexes only)
+
+    vector< list<long> > conflict_graph_adj_list;
 };
 
 #endif

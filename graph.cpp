@@ -3,6 +3,7 @@
 Graph::Graph()
 {
     using_matrix = false;
+    using_lemon = false;
     num_vertices = 0;
     num_edges = 0;
 }
@@ -10,6 +11,7 @@ Graph::Graph()
 Graph::Graph(long n, long m)
 {
     using_matrix = false;
+    using_lemon = false;
     num_vertices = n;
     num_edges = m;
 
@@ -26,6 +28,14 @@ Graph::~Graph()
 
 	if (using_matrix)
         free_index_matrix();
+
+    if (using_lemon)
+    {
+        lemon_vertices.clear();
+        lemon_edges.clear();
+        delete lemon_weight;
+        delete lemon_graph;
+    }
 }
 
 void Graph::init_index_matrix()
@@ -47,4 +57,18 @@ void Graph::free_index_matrix()
         delete[] index_matrix[i];
 
     delete[] index_matrix;
+}
+
+void Graph::init_lemon()
+{
+    using_lemon = true;
+
+    lemon_graph = new ListGraph();
+
+    lemon_vertices.reserve(num_vertices);
+    for (long i=0; i<num_vertices; ++i)
+        lemon_vertices.push_back(lemon_graph->addNode());
+
+    lemon_edges.reserve(num_edges);
+    lemon_weight = new ListGraph::EdgeMap<long>(*lemon_graph);
 }

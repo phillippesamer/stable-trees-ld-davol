@@ -1,12 +1,9 @@
 #include "io.h"
 #include "model.h"
 
-#include <lemon/list_graph.h>
-
 #include <cstdlib>
 
 using namespace std;
-using namespace lemon;
 
 int main(int argc, char **argv)
 {
@@ -16,27 +13,40 @@ int main(int argc, char **argv)
         return 0;
     }
 
-    IO* data = new IO();
+    IO* instance = new IO();
     
     // parse given input file and look for errors in it
-    if (data->parse_gcclib(argv[1]) == false)
+    if (instance->parse_gcclib(argv[1]) == false)
     {
         cout << "unable to parse input file" << endl;
-        delete data;
+        delete instance;
         return 0;
     }
 
-    Model *model = new Model(data);
-    int solutions_count = model->solve_lp_relax();
-    if (solutions_count > 0)
-    {
-        if (model->check_half_integer_solution() == false)
-            cout << "FALSE" << endl;
-        else
-            cout << "OK" << endl;
-    }
 
-    delete data;
+    Model *model = new Model(instance);
+    model->solve();
+
+    cout << endl;
+    for (long i=0; i < instance->num_edges(); i++)
+    {
+        pair<ProbeStatus,double> probing = model->probe_var_at_zero(i);
+        if (probing.first == PROBE_OPTIMAL)
+        {
+            cout << "probing var x[" << i << "] = 0 gives ObjVal=" << probing.second 
+            << " (runtime: " << model->runtime() << " s)" << endl;
+        }
+        else if (probing.first == PROBE_INFEASIBLE)
+        {
+            cout << "probing var x[" << i << "] = 0 gives an infeasible model" 
+            << " (runtime: " << model->runtime() << " s)" << endl;
+        }
+    }
+    cout << endl;
+
+    model->probe_var_at_one(5);
+
+    delete instance;
     delete model;
     return 0;
 }

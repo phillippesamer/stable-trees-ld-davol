@@ -39,12 +39,17 @@ bool IO::parse_gcclib(const char *filename)
         input_fh >> num_edges;
         input_fh >> this->num_conflicts;
 
-        this->conflicts.reserve(this->num_conflicts);
-        
         // initialize graph adjacency list, edge list and lemon object
         delete graph;
         this->graph = new Graph(num_vertices,num_edges);
         this->graph->init_index_matrix();
+        this->graph->init_lemon();
+
+        // conflict graph structures
+        this->conflicts.reserve(this->num_conflicts);
+        this->conflict_graph_adj_list.reserve(num_edges);
+        this->conflict_graph_adj_list.insert(this->conflict_graph_adj_list.begin(), 
+            num_edges, list<long>() );
         
         // m lines for edges in the instance graph
         for (long line=0; line<num_edges; ++line)
@@ -72,6 +77,11 @@ bool IO::parse_gcclib(const char *filename)
             // store index of current edge
             graph->index_matrix[i][j] = line;
             graph->index_matrix[j][i] = line;
+
+            // lemon edge
+            ListGraph::Edge e = graph->lemon_graph->addEdge(graph->lemon_vertices[i], graph->lemon_vertices[j]);
+            graph->lemon_edges.push_back(e);
+            (*graph->lemon_weight)[e] = w;
         }
         
         // p lines for conflicting edge pairs in the instance
@@ -114,6 +124,10 @@ bool IO::parse_gcclib(const char *filename)
             }
             
             this->conflicts.push_back(edges);
+
+            // update adjacency lists
+            this->conflict_graph_adj_list[e1_index].push_back(e2_index);
+            this->conflict_graph_adj_list[e2_index].push_back(e1_index);
         }
         
         input_fh.close();
@@ -123,6 +137,33 @@ bool IO::parse_gcclib(const char *filename)
         cerr << "ERROR: could not open file (might not exist)." << endl;
         return false;
     }
-    
+
+
+    /*
+    #ifdef DEBUG
+        cout << "~~~ LEMON says:  " << endl;
+        cout << "n = " << countNodes(*graph->lemon_graph) << endl;
+        cout << "m = " << countEdges(*graph->lemon_graph) << endl;
+
+        // iterating over edges
+        for (ListGraph::EdgeIt e_it(*graph->lemon_graph); e_it != INVALID; ++e_it)
+        {
+            cout << "edge " << graph->lemon_graph->id(e_it) << " is {" << graph->lemon_graph->id(graph->lemon_graph->u(e_it)) << "," << graph->lemon_graph->id(graph->lemon_graph->v(e_it)) << "}, ";
+            cout << "weight = " << (*graph->lemon_weight)[e_it] << endl;
+        }
+
+        // iterating over vertices and their neighbourhood
+        for (ListGraph::NodeIt vertex(*graph->lemon_graph); vertex != INVALID; ++vertex)
+        {
+            int cnt = 0;
+            for (ListGraph::IncEdgeIt e_it(*graph->lemon_graph,vertex); e_it != INVALID; ++e_it)
+                cnt++;
+
+            cout << "deg(" << graph->lemon_graph->id(vertex) << ") = " << cnt << endl;
+        }
+        cout << "~~~ ." << endl;
+    #endif
+    */
+
     return true;
 }
