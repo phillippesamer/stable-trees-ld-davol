@@ -22,10 +22,10 @@ using namespace lemon;
  * Optimization in Networks), so as to use the highly efficient implementations
  * of algorithms they offer
  * 
- * IO and Model classes are declared friends to avoid cumbersome get/set methods.
+ * IO, Model and LDDA classes are declared friends to avoid cumbersome get/set calls.
  * 
  * \author Phillippe Samer <phillippes@gmail.com>
- * \date 02.11.2021
+ * \date 01.11.2021
  */
 class Graph
 {
@@ -39,9 +39,13 @@ public:
 
     void init_lemon();
 
+    void update_single_weight(long,long);
+    void update_all_weights(vector<long>);
+
 private:
     friend class IO;
     friend class Model;
+    friend class LDDA;
 
     long num_vertices;
     long num_edges;

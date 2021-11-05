@@ -23,6 +23,8 @@ enum ProbeStatus {PROBE_OPTIMAL, PROBE_INFEASIBLE, PROBE_UNKNOWN};
  * NB! This implementation finds fixed cardinality stable sets in the conflict
  * graph of the corresponding MSTCC instance.
  * 
+ *  LDDA class is declared a friend to avoid cumbersome get/set calls.
+ * 
  * \author Phillippe Samer <phillippes@gmail.com>
  * \date 02.11.2021
  */
@@ -38,6 +40,8 @@ public:
     pair<ProbeStatus,double> probe_var(long, long);
 
 private:
+    friend class LDDA;
+
     IO *instance;
     long fixed_cardinality;
 

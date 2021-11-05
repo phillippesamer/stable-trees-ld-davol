@@ -72,3 +72,27 @@ void Graph::init_lemon()
     lemon_edges.reserve(num_edges);
     lemon_weight = new ListGraph::EdgeMap<long>(*lemon_graph);
 }
+
+void Graph::update_single_weight(long idx, long new_weight)
+{
+    // weight in the edge list
+    this->w[idx] = new_weight;
+
+    // weight in lemon's adjacency list
+    ListGraph::Edge e = this->lemon_edges[idx];
+    (*lemon_weight)[e] = new_weight;
+}
+
+void Graph::update_all_weights(vector<long> new_weights)
+{
+    // weight in the edge list
+    this->w.clear();
+    this->w = vector<long>(new_weights);
+
+    // weight in lemon's adjacency list
+    for (long i=0; i<num_edges; ++i)
+    {
+        ListGraph::Edge e = this->lemon_edges[i];
+        (*lemon_weight)[e] = new_weights[i];
+    }
+}

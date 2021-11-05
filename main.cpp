@@ -1,5 +1,6 @@
 #include "io.h"
 #include "model.h"
+#include "ldda.h"
 
 #include <cstdlib>
 
@@ -23,7 +24,6 @@ int main(int argc, char **argv)
         return 0;
     }
 
-
     Model *model = new Model(instance);
     model->solve();
 
@@ -44,7 +44,13 @@ int main(int argc, char **argv)
     }
     cout << endl;
 
+    LDDA *lagrangean = new LDDA(instance, model);
+    lagrangean->dual_ascent();
+
+    // clean up
+    delete lagrangean;
     delete instance;
     delete model;
+
     return 0;
 }

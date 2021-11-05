@@ -50,7 +50,7 @@ bool IO::parse_gcclib(const char *filename)
         this->conflicts.reserve(this->num_conflicts);
         this->conflict_graph_adj_list.reserve(num_edges);
         this->conflict_graph_adj_list.insert(this->conflict_graph_adj_list.begin(), 
-            num_edges, list<long>() );
+            num_edges, list<long>() );   // adds num_edges copies of an empty list
         
         // m lines for edges in the instance graph
         for (long line=0; line<num_edges; ++line)

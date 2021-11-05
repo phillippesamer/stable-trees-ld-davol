@@ -17,10 +17,10 @@ using namespace std;
  * Module for input and output functionality, including a Graph object for
  * main data structures.
  * 
- * Model is declared a friend to avoid cumbersome get/set methods.
+ * Model and LDDA are declared friends to avoid cumbersome get/set calls.
  * 
  * \author Phillippe Samer <phillippes@gmail.com>
- * \date 02.11.2021
+ * \date 01.11.2021
  */
 class IO
 {
@@ -34,6 +34,7 @@ public:
     
 private:
     friend class Model;
+    friend class LDDA;
 
     // instance data
     long num_conflicts;
