@@ -83,6 +83,7 @@ bool IO::parse_gcclib(const char *filename)
             ListGraph::Edge e = graph->lemon_graph->addEdge(graph->lemon_vertices[i], graph->lemon_vertices[j]);
             graph->lemon_edges.push_back(e);
             (*graph->lemon_weight)[e] = w;
+            (*graph->lemon_inverted_edge_index)[e] = line;
         }
         
         // p lines for conflicting edge pairs in the instance
@@ -150,6 +151,7 @@ bool IO::parse_gcclib(const char *filename)
         for (ListGraph::EdgeIt e_it(*graph->lemon_graph); e_it != INVALID; ++e_it)
         {
             cout << "edge " << graph->lemon_graph->id(e_it) << " is {" << graph->lemon_graph->id(graph->lemon_graph->u(e_it)) << "," << graph->lemon_graph->id(graph->lemon_graph->v(e_it)) << "}, ";
+            cout << "inverted index = " << (*graph->lemon_inverted_edge_index)[e_it] << ", ";
             cout << "weight = " << (*graph->lemon_weight)[e_it] << endl;
         }
 

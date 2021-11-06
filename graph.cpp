@@ -18,6 +18,7 @@ Graph::Graph(long n, long m)
     this->s.reserve(m);
     this->t.reserve(m);
     this->w.reserve(m);
+    this->mst_edges.reserve(n); // n-1, actually...
 }
 
 Graph::~Graph()
@@ -25,6 +26,7 @@ Graph::~Graph()
     s.clear();
     t.clear();
     w.clear();
+    mst_edges.clear();
 
 	if (using_matrix)
         free_index_matrix();
@@ -34,6 +36,7 @@ Graph::~Graph()
         lemon_vertices.clear();
         lemon_edges.clear();
         delete lemon_weight;
+        delete lemon_inverted_edge_index;
         delete lemon_graph;
     }
 }
@@ -71,6 +74,7 @@ void Graph::init_lemon()
 
     lemon_edges.reserve(num_edges);
     lemon_weight = new ListGraph::EdgeMap<long>(*lemon_graph);
+    lemon_inverted_edge_index = new ListGraph::EdgeMap<long>(*lemon_graph);
 }
 
 void Graph::update_single_weight(long idx, long new_weight)
@@ -99,18 +103,43 @@ void Graph::update_all_weights(vector<long> new_weights)
 
 bool Graph::mst()
 {
-    // 1. use lemon object to calculate mst via efficient implementation of
-    // kruskal's algorithm
+    /***
+     * Using LEMON to calculate a minimum spanning tree via their efficient 
+     * implementation of Kruskal's algorithm (actually, the efficient union-find
+     * is the game-changer).
+     * The MST cost and solution are store in this object.
+     */
 
-    // 2. store mst cost and solution in this object
+    #ifdef DEBUG
+        cout << "Determining an MST in the graph with edges:" << endl;
+        for (ListGraph::EdgeIt e_it(*lemon_graph); e_it != INVALID; ++e_it)
+        {
+            cout << "edge " << lemon_graph->id(e_it) << " is {" << lemon_graph->id(lemon_graph->u(e_it)) << "," << lemon_graph->id(lemon_graph->v(e_it)) << "}, ";
+            cout << "inverted index = " << (*lemon_inverted_edge_index)[e_it] << ", ";
+            cout << "weight = " << (*lemon_weight)[e_it] << endl;
+        }
+    #endif
 
-    /*
-    this->mst_cost = ...;
+    Timer mst_timer;
+    mst_timer.start();
+    vector<ListGraph::Edge> tree_edges;
+    this->mst_weight = kruskal(*lemon_graph, *lemon_weight, back_inserter(tree_edges));
+    mst_timer.halt();
 
+    #ifdef DEBUG
+        cout << "MST weight = " << this->mst_weight << endl;
+        cout << "MST edges: " << endl;
+        for (unsigned i = 0; i != tree_edges.size(); ++i)
+            cout << "{" << lemon_graph->id(lemon_graph->u(tree_edges[i])) << ", " << lemon_graph->id(lemon_graph->v(tree_edges[i])) << "}" << endl;
+        cout << "Elapsed time: " << mst_timer.realTime() << endl;
+    #endif
+
+    // store MST edges from lemon_inverted_edge_index
     this->mst_edges.clear();
-    this->mst_edges = vector<long>();
-    ...
-    */
+    for (vector<ListGraph::Edge>::iterator it = tree_edges.begin(); it != tree_edges.end(); ++it)
+            this->mst_edges.push_back( (*lemon_inverted_edge_index)[*it] );
+
+    return true;
 }
 
 bool Graph::lemon_test_adj(ListGraph &g, ListGraph::Node &x, ListGraph::Node &y)

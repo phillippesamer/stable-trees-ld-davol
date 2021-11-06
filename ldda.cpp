@@ -57,8 +57,10 @@ double LDDA::dual_ascent()
 {
     // main loop
 
+    instance->graph->mst();
+    /*
     long m = instance->graph->num_edges;
-    
+
     print_edge_weights();
 
     for (long i=0; i<m; ++i)
@@ -67,6 +69,8 @@ double LDDA::dual_ascent()
 
     instance->graph->update_all_weights( vector<long>(m, -1) );
     print_edge_weights();
+
+    */
 
     return 0;
 }

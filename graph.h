@@ -43,7 +43,7 @@ public:
     void update_all_weights(vector<long>);
 
     bool mst();
-    long mst_cost;
+    long mst_weight;
     vector<long> mst_edges;
 
 private:
@@ -68,6 +68,7 @@ private:
     ListGraph *lemon_graph;
     vector<ListGraph::Node> lemon_vertices;
     vector<ListGraph::Edge> lemon_edges;
+    ListGraph::EdgeMap<long> *lemon_inverted_edge_index;
     ListGraph::EdgeMap<long> *lemon_weight;
 
     bool lemon_test_adj(ListGraph &, ListGraph::Node &, ListGraph::Node &);
