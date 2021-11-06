@@ -71,6 +71,7 @@ private:
     ListGraph::EdgeMap<long> *lemon_weight;
 
     bool lemon_test_adj(ListGraph &, ListGraph::Node &, ListGraph::Node &);
+    long lemon_contract_dropping_parallel_edges(ListGraph &, ListGraph::EdgeMap<long> &, ListGraph::Node &, ListGraph::Node &);
 };
 
 #endif

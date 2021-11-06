@@ -115,7 +115,8 @@ bool Graph::mst()
 
 bool Graph::lemon_test_adj(ListGraph &g, ListGraph::Node &x, ListGraph::Node &y)
 {
-    // auxiliary function to test adjacency in the LEMON data structure
+    /// auxiliary function to test adjacency in the LEMON data structure
+
     for (ListGraph::IncEdgeIt e(g, x); e != INVALID; ++e)
     {
         //cout << "testing if " << g.id(y) << " is equal to " << g.id(g.v(e)) << " or " << g.id(g.u(e)) << endl;
@@ -123,4 +124,105 @@ bool Graph::lemon_test_adj(ListGraph &g, ListGraph::Node &x, ListGraph::Node &y)
             return true;
     }
     return false;
+}
+
+long lemon_contract_dropping_parallel_edges(ListGraph &g, ListGraph::EdgeMap<long> &w, ListGraph::Node &x, ListGraph::Node &y)
+{
+    /**
+     * wrapper over LEMON, contracting edge xy and keeping only the
+     * least-weight (given by w) of any parallel edges
+     */
+
+    long deleted_edges = 0;
+    vector<ListGraph::Edge> to_be_deleted;
+    
+    #ifdef DEBUG_CONTRACTION_WRAPPER
+    cout << "contracting edge {" << g.id(x) << "," << g.id(y) << "}" << endl;
+    #endif
+    
+    // traverses both neighbourhoods searching for common neighbours
+    for (ListGraph::IncEdgeIt edge_from_x(g,x); edge_from_x != INVALID; ++edge_from_x)
+    {
+        // other end of this edge is not y
+        if ( g.id(g.u(edge_from_x)) != g.id(y) && g.id(g.v(edge_from_x)) != g.id(y) )
+        {
+            // let z be the other end of this edge {x,z}
+            #ifdef DEBUG_CONTRACTION_WRAPPER
+            cout << "edge {" << g.id(g.u(edge_from_x)) << "," << g.id(g.v(edge_from_x)) << "}, of weight " << w[edge_from_x] << "... so z=";
+            #endif
+            
+            ListGraph::Node z = g.id(g.u(edge_from_x)) != g.id(x) ? g.u(edge_from_x) : g.v(edge_from_x) ;
+            
+            #ifdef DEBUG_CONTRACTION_WRAPPER
+            cout << g.id(z) << " - ";
+            #endif
+
+            // search for z in N(y)
+            bool z_neighbour_of_y = false;
+            ListGraph::IncEdgeIt edge_from_y(g,y);
+            while (edge_from_y != INVALID && !z_neighbour_of_y)
+            {
+                // let w be the other end of this edge {y,w}
+                ListGraph::Node w = g.id(g.u(edge_from_y)) != g.id(y) ? g.u(edge_from_y) : g.v(edge_from_y) ;
+                if ( g.id(z) == g.id(w) )
+                    z_neighbour_of_y = true;
+                else
+                    ++edge_from_y;
+            }
+
+            if (z_neighbour_of_y)
+            {
+                #ifdef DEBUG_CONTRACTION_WRAPPER
+                cout << "also a neighbour from y!" << endl;
+                cout << "edge {" << g.id(g.u(edge_from_y)) << "," << g.id(g.v(edge_from_y)) << "}, of weight " << w[edge_from_y] << "... ";
+                #endif
+                
+                if (w[edge_from_y] >= w[edge_from_x])
+                {
+                    #ifdef DEBUG_CONTRACTION_WRAPPER
+                    cout << "deleted!" << endl;
+                    #endif
+                    
+                    to_be_deleted.push_back(edge_from_y);
+                }
+                else
+                {
+                    #ifdef DEBUG_CONTRACTION_WRAPPER
+                    cout << "kept!" << endl;
+                    #endif
+
+                    to_be_deleted.push_back(edge_from_x);
+                }
+                ++deleted_edges;
+            }
+            else
+            {
+                #ifdef DEBUG_CONTRACTION_WRAPPER
+                cout << "not a neighour from y" << endl;
+                #endif
+            }
+        }
+    }
+
+    // delete parallel edges of larger costs
+    #ifdef DEBUG_CONTRACTION_WRAPPER
+    cout << "deleting " << deleted_edges << "=" << to_be_deleted.size() << " edges:" << endl;
+    #endif
+
+    for (long i=0; i<deleted_edges; ++i)
+    {
+        #ifdef DEBUG_CONTRACTION_WRAPPER
+        cout << "- {" << g.id(g.u(to_be_deleted[i])) << "," << g.id(g.v(to_be_deleted[i])) << "}, weight " << w[to_be_deleted[i]] << endl;
+        #endif
+
+        g.erase(to_be_deleted[i]);
+    }
+
+    #ifdef DEBUG_CONTRACTION_WRAPPER
+    cout << "done!" << endl;
+    #endif
+
+    g.contract(x, y, true);
+
+    return deleted_edges;
 }
