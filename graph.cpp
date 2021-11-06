@@ -96,3 +96,31 @@ void Graph::update_all_weights(vector<long> new_weights)
         (*lemon_weight)[e] = new_weights[i];
     }
 }
+
+bool Graph::mst()
+{
+    // 1. use lemon object to calculate mst via efficient implementation of
+    // kruskal's algorithm
+
+    // 2. store mst cost and solution in this object
+
+    /*
+    this->mst_cost = ...;
+
+    this->mst_edges.clear();
+    this->mst_edges = vector<long>();
+    ...
+    */
+}
+
+bool Graph::lemon_test_adj(ListGraph &g, ListGraph::Node &x, ListGraph::Node &y)
+{
+    // auxiliary function to test adjacency in the LEMON data structure
+    for (ListGraph::IncEdgeIt e(g, x); e != INVALID; ++e)
+    {
+        //cout << "testing if " << g.id(y) << " is equal to " << g.id(g.v(e)) << " or " << g.id(g.u(e)) << endl;
+        if ( g.id(g.v(e)) == g.id(y) || g.id(g.u(e)) == g.id(y))
+            return true;
+    }
+    return false;
+}

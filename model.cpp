@@ -19,7 +19,7 @@ Model::Model(IO *instance)
         cout << "setting objective function..." << endl;
         create_objective();
 
-        //model->write("kstab.lp");
+        model->write("kstab.lp");
     }
     catch(GRBException e)
     {
@@ -120,6 +120,35 @@ int Model::solve()
 double Model::runtime()
 {
     return model->get(GRB_DoubleAttr_Runtime);
+}
+
+void Model::update_single_weight(long idx, long new_weight)
+{
+    x[idx].set(GRB_DoubleAttr_Obj, new_weight);
+    model->update();
+
+    /*
+    #ifdef DEBUG
+        model->write("kstab_2.lp");
+    #endif
+    */
+}
+
+void Model::update_all_weights(vector<long> new_weights)
+{
+    GRBLinExpr objective_expression = 0;
+
+    for(long i = 0; i < instance->graph->num_edges; i++)
+        objective_expression += (new_weights[i])*x[i];
+
+    model->setObjective(objective_expression, GRB_MINIMIZE);
+    model->update();
+
+    /*
+    #ifdef DEBUG
+        model->write("kstab_3.lp");
+    #endif
+    */
 }
 
 pair<ProbeStatus,double> Model::probe_var(long probe_idx, long probe_value)

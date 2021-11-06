@@ -42,6 +42,10 @@ public:
     void update_single_weight(long,long);
     void update_all_weights(vector<long>);
 
+    bool mst();
+    long mst_cost;
+    vector<long> mst_edges;
+
 private:
     friend class IO;
     friend class Model;
@@ -65,6 +69,8 @@ private:
     vector<ListGraph::Node> lemon_vertices;
     vector<ListGraph::Edge> lemon_edges;
     ListGraph::EdgeMap<long> *lemon_weight;
+
+    bool lemon_test_adj(ListGraph &, ListGraph::Node &, ListGraph::Node &);
 };
 
 #endif

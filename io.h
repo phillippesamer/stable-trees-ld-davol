@@ -42,7 +42,7 @@ private:
 
     Graph *graph;  // different representations of the original graph
 
-    vector< pair<long,long> > conflicts;  // conflicting edges (indexes only)
+    vector< pair<long,long> > conflicts;  // conflicting edges (indices)
 
     vector< list<long> > conflict_graph_adj_list;
 };

@@ -37,6 +37,9 @@ public:
     int solve();
     double runtime();
 
+    void update_single_weight(long,long);
+    void update_all_weights(vector<long>);
+
     pair<ProbeStatus,double> probe_var(long, long);
 
 private:
