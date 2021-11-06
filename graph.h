@@ -3,6 +3,7 @@
 
 #include <vector>
 #include <iostream>
+#include <limits>
 
 #include <lemon/list_graph.h>
 #include <lemon/kruskal.h>
@@ -42,7 +43,7 @@ public:
     void update_single_weight(long,long);
     void update_all_weights(vector<long>);
 
-    bool mst();
+    void mst();
     long mst_weight;
     vector<long> mst_edges;
 
@@ -68,7 +69,7 @@ private:
     ListGraph *lemon_graph;
     vector<ListGraph::Node> lemon_vertices;
     vector<ListGraph::Edge> lemon_edges;
-    ListGraph::EdgeMap<long> *lemon_inverted_edge_index;
+    ListGraph::EdgeMap<long> *lemon_edges_inverted_index;
     ListGraph::EdgeMap<long> *lemon_weight;
 
     bool lemon_test_adj(ListGraph &, ListGraph::Node &, ListGraph::Node &);

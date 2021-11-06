@@ -58,6 +58,7 @@ double LDDA::dual_ascent()
     // main loop
 
     instance->graph->mst();
+    
     /*
     long m = instance->graph->num_edges;
 
