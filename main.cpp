@@ -25,24 +25,26 @@ int main(int argc, char **argv)
     }
 
     Model *model = new Model(instance);
-    model->solve();
+    model->solve(true);
 
+    /*
     cout << endl;
     for (long i=0; i < instance->num_edges(); i++)
     {
-        pair<ProbeStatus,double> probing = model->probe_var(i,1);
-        if (probing.first == PROBE_OPTIMAL)
+        pair<ModelStatus,double> probing = model->probe_var(i,1);
+        if (probing.first == AT_OPTIMUM)
         {
             cout << "probing var x[" << i << "] = 1 gives ObjVal=" << probing.second 
             << " (runtime: " << model->runtime() << " s)" << endl;
         }
-        else if (probing.first == PROBE_INFEASIBLE)
+        else if (probing.first == IS_INFEASIBLE)
         {
             cout << "probing var x[" << i << "] = 1 gives an infeasible model" 
             << " (runtime: " << model->runtime() << " s)" << endl;
         }
     }
     cout << endl;
+    */
 
     LDDA *lagrangean = new LDDA(instance, model);
     lagrangean->dual_ascent();

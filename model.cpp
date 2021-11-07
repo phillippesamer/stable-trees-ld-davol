@@ -91,7 +91,7 @@ void Model::create_objective()
     model->update();
 }
 
-int Model::solve()
+int Model::solve(bool logging)
 {
     try
     {
@@ -106,8 +106,88 @@ int Model::solve()
         // need to disable presolve reductions that affect user cuts
         //model->getEnv().set(GRB_IntParam_PreCrush, 1);
 
+        if (logging == true)
+            model->set(GRB_IntParam_OutputFlag, 1);
+        else
+            model->set(GRB_IntParam_OutputFlag, 0);
+
         model->optimize();
-        return model->get(GRB_IntAttr_SolCount);
+
+        // store results in this object
+        if (model->get(GRB_IntAttr_Status) == GRB_OPTIMAL)
+        {
+            this->solution_status = AT_OPTIMUM;
+            this->solution_runtime = model->get(GRB_DoubleAttr_Runtime);
+            this->solution_vector.clear();
+
+            // the weights are integral, so the optimal value should also be
+            double optval = model->get(GRB_DoubleAttr_ObjVal);
+            this->solution_weight = (long) optval;
+            if (floor(optval) - optval != 0)
+            {
+                this->solution_status = STATUS_UNKNOWN;
+                cout << "Unexpected error: optimal value is " << optval << " (not integral!)" << endl << endl;
+            }
+
+            // save bool vector of this solution
+
+            #ifdef DEBUG
+                cout << "Model optimal weight: " << this->solution_weight << endl;
+                //
+                cout << "Model optimal solution (Gurobi vars): " << endl;
+                for (long i=0; i < instance->graph->num_edges; ++i)
+                        cout << this->x[i].get(GRB_DoubleAttr_X);
+                cout << endl;
+                //
+            #endif
+
+            #ifdef DEBUG
+                cout << "Model optimal vector: " << endl;
+            #endif
+            for (long i=0; i < instance->graph->num_edges; ++i)
+            {
+                if (this->x[i].get(GRB_DoubleAttr_X) > EPSILON_TOL)
+                    this->solution_vector.push_back(true);
+                else
+                    this->solution_vector.push_back(false);
+
+                #ifdef DEBUG
+                    cout << this->solution_vector.back();
+                #endif
+            }
+            #ifdef DEBUG
+                cout << endl;
+                cout << "Model runtime: " << solution_runtime << endl;
+            #endif
+
+            // returning number of solutions (likely sub-optimal), in case it's useful later
+            return model->get(GRB_IntAttr_SolCount);
+        }
+        else if (model->get(GRB_IntAttr_Status) == GRB_INFEASIBLE)
+        {
+            this->solution_status = IS_INFEASIBLE;
+            this->solution_runtime = model->get(GRB_DoubleAttr_Runtime);
+
+            this->solution_weight = numeric_limits<long>::max();
+            this->solution_vector.clear();
+
+            #ifdef DEBUG
+                cout << "Model infeasible!" << endl;
+                cout << "Model runtime: " << solution_runtime << endl;
+            #endif
+
+            return 0;
+        }
+        else
+        {
+            this->solution_status = STATUS_UNKNOWN;
+            this->solution_runtime = model->get(GRB_DoubleAttr_Runtime);
+            this->solution_vector.clear();
+
+            cout << "Unexpected error: solve() got neither optimal nor infeasible model" << endl;
+
+            return 0;
+        }
     }
     catch(GRBException e)
     {
@@ -151,7 +231,7 @@ void Model::update_all_weights(vector<long> new_weights)
     */
 }
 
-pair<ProbeStatus,double> Model::probe_var(long probe_idx, long probe_value)
+pair<ModelStatus,double> Model::probe_var(long probe_idx, long probe_value)
 {
     // change given var to continuous and update lb=ub
     x[probe_idx].set(GRB_CharAttr_VType, GRB_CONTINUOUS);
@@ -195,17 +275,17 @@ pair<ProbeStatus,double> Model::probe_var(long probe_idx, long probe_value)
     model->set(GRB_IntParam_OutputFlag, 1);
 
     // save optimization status (optimal/infeasible) and result, if optimal
-    ProbeStatus status = PROBE_UNKNOWN;
+    ModelStatus status = STATUS_UNKNOWN;
     double result = numeric_limits<double>::max();
 
     if (model->get(GRB_IntAttr_Status) == GRB_OPTIMAL)
     {
-        status = PROBE_OPTIMAL;
+        status = AT_OPTIMUM;
         result = model->get(GRB_DoubleAttr_ObjVal);
     }
     else if (model->get(GRB_IntAttr_Status) == GRB_INFEASIBLE)
     {
-        status = PROBE_INFEASIBLE;
+        status = IS_INFEASIBLE;
         result = numeric_limits<double>::max();
     }
     else

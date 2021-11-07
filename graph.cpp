@@ -20,7 +20,7 @@ Graph::Graph(long n, long m)
     this->s.reserve(m);
     this->t.reserve(m);
     this->w.reserve(m);
-    this->mst_edges.reserve(n);
+    this->mst_vector.reserve(m);
 }
 
 Graph::~Graph()
@@ -28,7 +28,7 @@ Graph::~Graph()
     s.clear();
     t.clear();
     w.clear();
-    mst_edges.clear();
+    mst_vector.clear();
 
 	if (using_matrix)
         free_index_matrix();
@@ -129,10 +129,15 @@ void Graph::mst()
     this->mst_weight = kruskal(*lemon_graph, *lemon_weight, back_inserter(tree_edges));
     mst_timer.halt();
 
-    // store original indices of edges in this MST
-    this->mst_edges.clear();
+    // store 0-1 vector indicating which edges are in the MST
+    this->mst_vector.clear();
+    this->mst_vector = vector<bool>(num_edges, false);
+
     for (vector<ListGraph::Edge>::iterator it = tree_edges.begin(); it != tree_edges.end(); ++it)
-            this->mst_edges.push_back( (*lemon_edges_inverted_index)[*it] );
+    {
+        long edge_index = (*lemon_edges_inverted_index)[*it];
+        this->mst_vector[edge_index] = true;
+    }
 
     #ifdef DEBUG
         cout << "MST weight = " << this->mst_weight << endl;
@@ -140,14 +145,15 @@ void Graph::mst()
         cout << "MST edges (in LEMON): " << endl;
         for (unsigned i = 0; i != tree_edges.size(); ++i)
             cout << "{" << lemon_graph->id(lemon_graph->u(tree_edges[i])) << ", "
-                 << lemon_graph->id(lemon_graph->v(tree_edges[i])) << "}" << endl;
+                 << lemon_graph->id(lemon_graph->v(tree_edges[i])) << "}"
+                 << ", Graph edge " << (*lemon_edges_inverted_index)[ tree_edges[i] ] << endl;
 
-        cout << "MST edges indices (in Graph): " << endl;
-        for (unsigned i = 0; i != mst_edges.size(); ++i)
-            cout << mst_edges[i] << " ";
+        cout << "MST vector: " << endl;
+        for (unsigned i = 0; i != mst_vector.size(); ++i)
+            cout << mst_vector[i];
         cout << endl;
 
-        cout << "Elapsed time: " << mst_timer.realTime() << endl;
+        cout << "MST runtime: " << mst_timer.realTime() << endl;
     #endif
 }
 

@@ -12,7 +12,7 @@
 
 #define EPSILON_TOL 0.00001
 
-enum ProbeStatus {PROBE_OPTIMAL, PROBE_INFEASIBLE, PROBE_UNKNOWN};
+enum ModelStatus {AT_OPTIMUM, IS_INFEASIBLE, STATUS_UNKNOWN};
 
 /***
  * \file model.h
@@ -34,13 +34,18 @@ public:
     Model(IO*);
     ~Model();
     
-    int solve();
+    int solve(bool);
+    long solution_weight;
+    vector<bool> solution_vector;
+    ModelStatus solution_status;
+    double solution_runtime;
+
     double runtime();
 
     void update_single_weight(long,long);
     void update_all_weights(vector<long>);
 
-    pair<ProbeStatus,double> probe_var(long, long);
+    pair<ModelStatus,double> probe_var(long, long);
 
 private:
     friend class LDDA;

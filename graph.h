@@ -45,7 +45,7 @@ public:
 
     void mst();
     long mst_weight;
-    vector<long> mst_edges;
+    vector<bool> mst_vector;
 
 private:
     friend class IO;
