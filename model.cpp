@@ -10,16 +10,11 @@ Model::Model(IO *instance)
         this->env = new GRBEnv();
         this->model = new GRBModel(*env);
 
-        cout << "creating variables..." << endl;
         create_variables();
-
-        cout << "creating constraints..." << endl;
         create_constraints();
-
-        cout << "setting objective function..." << endl;
         create_objective();
 
-        model->write("kstab.lp");
+        //model->write("kstab.lp");
     }
     catch(GRBException e)
     {
@@ -129,23 +124,21 @@ int Model::solve(bool logging)
                 cout << "Unexpected error: optimal value is " << optval << " (not integral!)" << endl << endl;
             }
 
-            // save bool vector of this solution
-
             #ifdef DEBUG
                 cout << "Model optimal weight: " << this->solution_weight << endl;
-                //
-                cout << "Model optimal solution (Gurobi vars): " << endl;
-                for (long i=0; i < instance->graph->num_edges; ++i)
-                        cout << this->x[i].get(GRB_DoubleAttr_X);
-                cout << endl;
-                //
             #endif
+
+            // save bool vector of this solution
 
             #ifdef DEBUG
                 cout << "Model optimal vector: " << endl;
             #endif
+
             for (long i=0; i < instance->graph->num_edges; ++i)
             {
+                // NB: gurobi vars are floating point numbers, allowing +0 and -0!
+                // The vector<bool> below is safer and easier to use
+
                 if (this->x[i].get(GRB_DoubleAttr_X) > EPSILON_TOL)
                     this->solution_vector.push_back(true);
                 else

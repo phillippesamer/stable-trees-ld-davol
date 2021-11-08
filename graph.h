@@ -47,6 +47,8 @@ public:
     long mst_weight;
     vector<bool> mst_vector;
 
+    pair<bool,long> mst_probing_var(long, bool);
+
 private:
     friend class IO;
     friend class Model;
@@ -73,6 +75,7 @@ private:
     ListGraph::EdgeMap<long> *lemon_weight;
 
     bool lemon_test_adj(ListGraph &, ListGraph::Node &, ListGraph::Node &);
+    ListGraph::Edge lemon_test_adj_getting_edge(ListGraph &, ListGraph::Node &, ListGraph::Node &);
     long lemon_contract_dropping_parallel_edges(ListGraph &, ListGraph::EdgeMap<long> &, ListGraph::Node &, ListGraph::Node &);
 };
 

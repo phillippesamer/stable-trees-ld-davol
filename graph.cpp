@@ -111,6 +111,7 @@ void Graph::mst()
      * is the game-changer). The MST cost and solution are store in this object.
      */
 
+    /*
     #ifdef DEBUG
         cout << "Determining an MST in the graph with edges:" << endl;
         for (ListGraph::EdgeIt e_it(*lemon_graph); e_it != INVALID; ++e_it)
@@ -122,6 +123,7 @@ void Graph::mst()
             cout << "weight = " << (*lemon_weight)[e_it] << endl;
         }
     #endif
+    */
 
     Timer mst_timer;
     mst_timer.start();
@@ -142,11 +144,13 @@ void Graph::mst()
     #ifdef DEBUG
         cout << "MST weight = " << this->mst_weight << endl;
 
+        /*
         cout << "MST edges (in LEMON): " << endl;
         for (unsigned i = 0; i != tree_edges.size(); ++i)
             cout << "{" << lemon_graph->id(lemon_graph->u(tree_edges[i])) << ", "
                  << lemon_graph->id(lemon_graph->v(tree_edges[i])) << "}"
                  << ", Graph edge " << (*lemon_edges_inverted_index)[ tree_edges[i] ] << endl;
+        */
 
         cout << "MST vector: " << endl;
         for (unsigned i = 0; i != mst_vector.size(); ++i)
@@ -155,6 +159,174 @@ void Graph::mst()
 
         cout << "MST runtime: " << mst_timer.realTime() << endl;
     #endif
+}
+
+pair<bool,long> Graph::mst_probing_var(long probe_idx, bool probe_value)
+{
+    /***
+     * Returns the cost of an MST removing an edge (if probe_value = 0) or
+     * fixing it in the solution (if probe_value = 1). Since the former case
+     * might result in a disconnected graph, the first element in the returned
+     * pair indicates whether the bound in the second element corresponds to an
+     * actual spanning tree (else, it corresponds to a minimum spanning forest)
+     */
+
+    #ifdef DEBUG
+        cout << "probing MST with edge " << probe_idx;
+        if (!probe_value) cout << " forbidden" << endl;
+        else cout << " forced into the tree" << endl;
+    #endif
+
+    /* 1. DUPLICATE THE LEMON ADJACENCY LIST
+     * Only this structure is edited next! Using the LEMON class template
+     * GraphCopy to this end.
+     */
+
+    ListGraph graph_copy;
+
+    GraphCopy<ListGraph, ListGraph> copier(*this->lemon_graph, graph_copy);
+
+    // save vertex correspondence: must be from old to new
+    ListGraph::NodeMap<ListGraph::Node> vertex_ref_old2new(*this->lemon_graph);
+    copier.nodeRef(vertex_ref_old2new);
+
+    // save inverted edge correspondences: must be from new to old
+    ListGraph::EdgeMap<ListGraph::Edge> edge_ref_new2old(graph_copy);
+    copier.edgeCrossRef(edge_ref_new2old);
+
+    // copy edge map
+    ListGraph::EdgeMap<long> weights_copy(graph_copy);
+    copier.edgeMap(*this->lemon_weight, weights_copy);
+
+    copier.run();   // actually executes the copy actions determined above
+
+    #ifdef DEBUG
+        cout << "graph copy consists of:" << endl;
+        for (ListGraph::EdgeIt e_it(graph_copy); e_it != INVALID; ++e_it)
+        {
+            cout << "edge " << graph_copy.id(e_it) << " is {"
+                 << graph_copy.id(graph_copy.u(e_it)) << ","
+                 << graph_copy.id(graph_copy.v(e_it)) << "}, ";
+            cout << "inverted index = " << (*lemon_edges_inverted_index)[ edge_ref_new2old[e_it] ] << ", ";
+            cout << "weight = " << weights_copy[e_it] << endl;
+        }
+    #endif
+
+    long vertex_1 = this->s[probe_idx];
+    long vertex_2 = this->t[probe_idx];
+
+    // Case 1: probing MST forcing the edge
+    if (probe_value == true)
+    {
+        // 2.1 CONTRACT EDGE
+        cout << "contracting copied edge {"
+             << graph_copy.id(vertex_ref_old2new[lemon_vertices[vertex_1]]) << ","
+             << graph_copy.id(vertex_ref_old2new[lemon_vertices[vertex_2]]) << "}" << endl;
+        lemon_contract_dropping_parallel_edges( graph_copy,
+                                                weights_copy,
+                                                vertex_ref_old2new[lemon_vertices[vertex_1]],
+                                                vertex_ref_old2new[lemon_vertices[vertex_2]] );
+    }
+
+    // Case 2: probing MST without the edge
+    else
+    {
+        // 2.2 DELETE EDGE
+        ListGraph::Node v1_in_copy = vertex_ref_old2new[ lemon_vertices[vertex_1] ];
+        ListGraph::Node v2_in_copy = vertex_ref_old2new[ lemon_vertices[vertex_2] ];
+        ListGraph::Edge edge_in_copy = lemon_test_adj_getting_edge(graph_copy, v1_in_copy, v2_in_copy);
+
+        #ifdef DEBUG
+        cout << "deleting copied edge "
+             << graph_copy.id(edge_in_copy) << " = {"
+             << graph_copy.id(graph_copy.u(edge_in_copy)) << ","
+             << graph_copy.id(graph_copy.v(edge_in_copy)) << "} = { "
+             << ""
+             << graph_copy.id(v1_in_copy) << ","
+             << graph_copy.id(v2_in_copy) << "}, ";
+        cout << "inverted index = " << (*lemon_edges_inverted_index)[ edge_ref_new2old[edge_in_copy] ] << ", ";
+        cout << "weight = " << weights_copy[edge_in_copy] << endl;
+        #endif
+
+        graph_copy.erase(edge_in_copy);
+    }
+
+    #ifdef DEBUG
+        cout << "the edited graph copy consists of:" << endl;
+        for (ListGraph::EdgeIt e_it(graph_copy); e_it != INVALID; ++e_it)
+        {
+            cout << "edge " << graph_copy.id(e_it) << " is {"
+                 << graph_copy.id(graph_copy.u(e_it)) << ","
+                 << graph_copy.id(graph_copy.v(e_it)) << "}, ";
+            cout << "inverted index = " << (*lemon_edges_inverted_index)[ edge_ref_new2old[e_it] ] << ", ";
+            cout << "weight = " << weights_copy[e_it] << endl;
+        }
+    #endif
+
+    // 3. RUN MST
+    Timer mst_timer;
+    mst_timer.start();
+    vector<ListGraph::Edge> tree_edges;
+    long weight = kruskal(graph_copy, weights_copy, back_inserter(tree_edges));
+    mst_timer.halt();
+
+    // 4. PREPARE RETURN VALUE
+    bool result_is_tree = true;
+    long result_weight = weight;
+
+    if (probe_value == true)
+    {
+        // add cost of contracted edge
+        result_weight += this->w[probe_idx];
+    }
+    else
+    {
+        // check if solution after we deleted the edge is a spanning tree or forest
+        if (tree_edges.size() != (unsigned) this->num_vertices - 1)
+        {
+            result_is_tree = false;
+            #ifdef DEBUG
+                cout << "kruskal returns a spanning forest (" << tree_edges.size() << " edges!)" << endl;
+            #endif
+        }
+        else
+        {
+            #ifdef DEBUG
+                cout << "kruskal returns a spanning tree" << endl;
+            #endif
+        }
+    }
+
+    #ifdef DEBUG
+        cout << "original graph should be intact:" << endl;
+        for (ListGraph::EdgeIt e_it(*lemon_graph); e_it != INVALID; ++e_it)
+        {
+            cout << "edge " << lemon_graph->id(e_it) << " is {"
+                 << lemon_graph->id(lemon_graph->u(e_it)) << ","
+                 << lemon_graph->id(lemon_graph->v(e_it)) << "}, ";
+            cout << "inverted index = " << (*lemon_edges_inverted_index)[e_it] << ", ";
+            cout << "weight = " << (*lemon_weight)[e_it] << endl;
+        }
+    #endif
+
+    // TO DO: clean up
+
+    return make_pair(result_is_tree, result_weight);
+}
+
+ListGraph::Edge Graph::lemon_test_adj_getting_edge(ListGraph &g, ListGraph::Node &x, ListGraph::Node &y)
+{
+    /***
+     * Auxiliary function to test adjacency in the LEMON data structure.
+     * Returns edge, if found; otherwise, returns INVALID
+     */
+
+    for (ListGraph::IncEdgeIt e(g, x); e != INVALID; ++e)
+    {
+        if ( g.id(g.v(e)) == g.id(y) || g.id(g.u(e)) == g.id(y))
+            return e;
+    }
+    return INVALID;
 }
 
 bool Graph::lemon_test_adj(ListGraph &g, ListGraph::Node &x, ListGraph::Node &y)
@@ -169,10 +341,10 @@ bool Graph::lemon_test_adj(ListGraph &g, ListGraph::Node &x, ListGraph::Node &y)
     return false;
 }
 
-long lemon_contract_dropping_parallel_edges(ListGraph &g,
-                                            ListGraph::EdgeMap<long> &w,
-                                            ListGraph::Node &x,
-                                            ListGraph::Node &y)
+long Graph::lemon_contract_dropping_parallel_edges(ListGraph &g,
+                                                   ListGraph::EdgeMap<long> &w,
+                                                   ListGraph::Node &x,
+                                                   ListGraph::Node &y)
 {
     /**
      * wrapper over LEMON, contracting edge xy and keeping only the
