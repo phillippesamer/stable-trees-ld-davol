@@ -43,7 +43,7 @@ public:
     void update_single_weight(long,long);
     void update_all_weights(vector<long>);
 
-    void mst();
+    bool mst();
     long mst_weight;
     vector<bool> mst_vector;
 

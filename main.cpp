@@ -3,8 +3,32 @@
 #include "ldda.h"
 
 #include <cstdlib>
+#include <sys/time.h>       // for 'gettimeofday()'
 
 using namespace std;
+
+static struct timeval *clock_start;
+
+void start_timer()
+{
+    // current clock time
+    clock_start = (struct timeval *) malloc(sizeof(struct timeval) );
+    gettimeofday(clock_start, 0);
+}
+
+void get_timer()
+{
+    struct timeval *clock_stop;
+    clock_stop = (struct timeval *) malloc( sizeof(struct timeval) );
+    gettimeofday(clock_stop, 0);
+
+    unsigned long clock_time = 1.e6 * (clock_stop->tv_sec - clock_start->tv_sec) +
+                                      (clock_stop->tv_usec - clock_start->tv_usec);
+
+    printf( "main() says: runtime in seconds\n%.4f\n" , ((double)clock_time / (double)1.e6) );
+
+    free(clock_stop);
+}
 
 int main(int argc, char **argv)
 {
@@ -25,7 +49,7 @@ int main(int argc, char **argv)
     }
 
     Model *model = new Model(instance);
-    model->solve(true);
+    //model->solve(true);
 
     /*
     cout << endl;
@@ -47,9 +71,12 @@ int main(int argc, char **argv)
     */
 
     LDDA *lagrangean = new LDDA(instance, model);
+    start_timer();
     lagrangean->dual_ascent();
+    get_timer();
 
     // clean up
+    free(clock_start);
     delete lagrangean;
     delete instance;
     delete model;

@@ -57,19 +57,17 @@ double LDDA::dual_ascent()
 {
     // main loop
 
-    instance->graph->mst();
-    model->solve(true);
+    //instance->graph->mst();   // ignoring return value, assuming a spanning tree exists
+    //model->solve(true);
 
     // mst probing
-    //cout << endl;
-    //for (long i=0; i < instance->num_edges(); i++)
-    //{
-        long i = 0;
-        pair<bool,long> probing = instance->graph->mst_probing_var(i,true);
+    cout << endl;
+    for (long i=0; i < instance->num_edges(); i++)
+    {
+        pair<bool,long> probing = instance->graph->mst_probing_var(i,false);
         cout << "probing edge " << i << " gives (" << probing.first << "," << probing.second << ")" << endl;
-
-    //}
-    //cout << endl;
+    }
+    cout << endl;
 
     /*
     long m = instance->graph->num_edges;
