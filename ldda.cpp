@@ -61,11 +61,30 @@ double LDDA::dual_ascent()
     //model->solve(true);
 
     // mst probing
+    /*
     cout << endl;
     for (long i=0; i < instance->num_edges(); i++)
     {
         pair<bool,long> probing = instance->graph->mst_probing_var(i,false);
         cout << "probing x[" << i << "]=" << 0 << " gives (" << probing.first << "," << probing.second << ")" << endl;
+    }
+    cout << endl;
+    */
+
+    cout << endl;
+    for (long i=0; i < instance->num_edges(); i++)
+    {
+        pair<ModelStatus,double> probing = model->probe_var(i,false);
+        if (probing.first == AT_OPTIMUM)
+        {
+            cout << "probing var x[" << i << "] = 0 gives ObjVal=" << probing.second 
+            << " (runtime: " << model->runtime() << " s)" << endl;
+        }
+        else if (probing.first == IS_INFEASIBLE)
+        {
+            cout << "probing var x[" << i << "] = 0 gives an infeasible model" 
+            << " (runtime: " << model->runtime() << " s)" << endl;
+        }
     }
     cout << endl;
 

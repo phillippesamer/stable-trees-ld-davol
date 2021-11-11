@@ -224,12 +224,13 @@ void Model::update_all_weights(vector<long> new_weights)
     */
 }
 
-pair<ModelStatus,double> Model::probe_var(long probe_idx, long probe_value)
+pair<ModelStatus,double> Model::probe_var(long probe_idx, bool probe_value)
 {
-    // change given var to continuous and update lb=ub
+    // change given var to continuous and update lb=ub=probe
+    double probe_dbl = probe_value == true ? 1 : 0;         // redundant, but...
     x[probe_idx].set(GRB_CharAttr_VType, GRB_CONTINUOUS);
-    x[probe_idx].set(GRB_DoubleAttr_LB, probe_value);
-    x[probe_idx].set(GRB_DoubleAttr_UB, probe_value);
+    x[probe_idx].set(GRB_DoubleAttr_LB, probe_dbl);
+    x[probe_idx].set(GRB_DoubleAttr_UB, probe_dbl);
 
     /*
     #ifdef DEBUG
@@ -238,7 +239,7 @@ pair<ModelStatus,double> Model::probe_var(long probe_idx, long probe_value)
     */
 
     // if fixing at 1, change vars corresponding to neighbours: continuous, lb=ub=0
-    if (probe_value > 0)
+    if (probe_value == true)
     {
         for (list<long>::iterator it = instance->conflict_graph_adj_list[probe_idx].begin(); 
              it != instance->conflict_graph_adj_list[probe_idx].end(); ++it)
@@ -289,7 +290,7 @@ pair<ModelStatus,double> Model::probe_var(long probe_idx, long probe_value)
     x[probe_idx].set(GRB_DoubleAttr_UB, 1);
     x[probe_idx].set(GRB_CharAttr_VType, GRB_BINARY);
 
-    if (probe_value > 0)
+    if (probe_value == true)
     {
         for (list<long>::iterator it = instance->conflict_graph_adj_list[probe_idx].begin(); 
              it != instance->conflict_graph_adj_list[probe_idx].end(); ++it)
