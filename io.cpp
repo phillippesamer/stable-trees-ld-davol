@@ -53,7 +53,7 @@ bool IO::parse_gcclib(const char *filename)
             num_edges, list<long>() );   // adds num_edges copies of an empty list
         
         // m lines for edges in the instance graph
-        for (long line=0; line<num_edges; ++line)
+        for (long line_idx=0; line_idx<num_edges; ++line_idx)
         {
             // read edge terminal nodes and weight: i j w  (incidentally, i<j)
             long i, j, w;
@@ -71,23 +71,23 @@ bool IO::parse_gcclib(const char *filename)
             if (graph->index_matrix[i][j] >= 0 ||
                 graph->index_matrix[j][i] >= 0 )
             {
-                cerr << "ERROR: repeated edge in input file line " << line << endl << endl;
+                cerr << "ERROR: repeated edge in input file line " << line_idx << endl << endl;
                 return false;
             }
             
             // store index of current edge
-            graph->index_matrix[i][j] = line;
-            graph->index_matrix[j][i] = line;
+            graph->index_matrix[i][j] = line_idx;
+            graph->index_matrix[j][i] = line_idx;
 
             // lemon edge
             ListGraph::Edge e = graph->lemon_graph->addEdge(graph->lemon_vertices[i], graph->lemon_vertices[j]);
             graph->lemon_edges.push_back(e);
             (*graph->lemon_weight)[e] = w;
-            (*graph->lemon_edges_inverted_index)[e] = line;
+            (*graph->lemon_edges_inverted_index)[e] = line_idx;
         }
         
         // p lines for conflicting edge pairs in the instance
-        for (long line=0; line<num_conflicts; ++line)
+        for (long line_idx=0; line_idx<num_conflicts; ++line_idx)
         {
             /* read terminal nodes from each edge in the pair:
              * a b c d (incidentally, a<b and c<d)
@@ -104,7 +104,7 @@ bool IO::parse_gcclib(const char *filename)
             // should never happen
             if (e1_index<0 || e2_index<0)
             {
-                cerr << "ERROR: edge not found in conflict line " << line << endl << endl;
+                cerr << "ERROR: edge not found in conflict line " << line_idx << endl << endl;
                 return false;
             }
             
@@ -119,7 +119,7 @@ bool IO::parse_gcclib(const char *filename)
                 {
                     if (cur.second == edges.first || cur.second == edges.second)
                     {
-                        cerr << "ERROR: repeated conflict in input file line " << line << endl << endl;
+                        cerr << "ERROR: repeated conflict in input file line " << line_idx << endl << endl;
                         return false;
                     }
                 }

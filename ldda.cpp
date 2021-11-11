@@ -65,7 +65,7 @@ double LDDA::dual_ascent()
     for (long i=0; i < instance->num_edges(); i++)
     {
         pair<bool,long> probing = instance->graph->mst_probing_var(i,false);
-        cout << "probing edge " << i << " gives (" << probing.first << "," << probing.second << ")" << endl;
+        cout << "probing x[" << i << "]=" << 0 << " gives (" << probing.first << "," << probing.second << ")" << endl;
     }
     cout << endl;
 
