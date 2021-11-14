@@ -23,7 +23,7 @@ enum ModelStatus {AT_OPTIMUM, IS_INFEASIBLE, STATUS_UNKNOWN};
  * NB! This implementation finds fixed cardinality stable sets in the conflict
  * graph of the corresponding MSTCC instance.
  * 
- *  LDDA class is declared a friend to avoid cumbersome get/set calls.
+ * LDDA class is declared a friend to avoid cumbersome get/set calls.
  * 
  * \author Phillippe Samer <phillippes@gmail.com>
  * \date 02.11.2021
@@ -46,6 +46,8 @@ public:
     void update_all_weights(vector<long>);
 
     pair<ModelStatus,double> probe_var(long, bool);
+
+    void fix_var(long, bool);
 
 private:
     friend class LDDA;

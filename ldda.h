@@ -32,6 +32,8 @@ private:
     double vertex_fix_bound();
 
     void print_edge_weights();
+
+    vector< pair<long,bool> > fixed_vars;   // vars fixed during execution
 };
 
 #endif

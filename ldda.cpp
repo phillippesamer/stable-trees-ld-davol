@@ -4,6 +4,7 @@ LDDA::LDDA(IO *instance, Model *model)
 {
     this->instance = instance;
     this->model = model;
+    this->fixed_vars = vector< pair<long,bool> >();
 
     // initialize multipliers at zero
     multipliers_log = vector< vector<double> >();
@@ -14,6 +15,7 @@ LDDA::LDDA(IO *instance, Model *model, vector<double> initial_multipliers)
 {
     this->instance = instance;
     this->model = model;
+    this->fixed_vars = vector< pair<long,bool> >();
 
     // use given values as the initial multipliers
     multipliers_log = vector< vector<double> >();
@@ -22,24 +24,17 @@ LDDA::LDDA(IO *instance, Model *model, vector<double> initial_multipliers)
 
 LDDA::~LDDA()
 {
-    multipliers_log.clear();
+    this->multipliers_log.clear();
+    this->fixed_vars.clear();
 }
 
 double LDDA::edge_deletion_bound()
 {
-    // copy lemon graph
-
-    // delete edge
-
     return 0;
 }
 
 double LDDA::edge_contraction_bound()
 {
-    // copy lemon graph
-
-    // contract edge
-
     return 0;
 }
 
@@ -74,10 +69,10 @@ double LDDA::dual_ascent()
     cout << endl;
     for (long i=0; i < instance->num_edges(); i++)
     {
-        pair<ModelStatus,double> probing = model->probe_var(i,false);
+        pair<ModelStatus,double> probing = model->probe_var(i,true);
         if (probing.first == AT_OPTIMUM)
         {
-            cout << "probing var x[" << i << "] = 0 gives ObjVal=" << probing.second 
+            cout << "probing var x[" << i << "] = " << true << " gives ObjVal=" << probing.second 
             << " (runtime: " << model->runtime() << " s)" << endl;
         }
         else if (probing.first == IS_INFEASIBLE)

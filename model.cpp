@@ -227,36 +227,7 @@ void Model::update_all_weights(vector<long> new_weights)
 pair<ModelStatus,double> Model::probe_var(long probe_idx, bool probe_value)
 {
     // change given var to continuous and update lb=ub=probe
-    double probe_dbl = probe_value == true ? 1 : 0;         // redundant, but...
-    x[probe_idx].set(GRB_CharAttr_VType, GRB_CONTINUOUS);
-    x[probe_idx].set(GRB_DoubleAttr_LB, probe_dbl);
-    x[probe_idx].set(GRB_DoubleAttr_UB, probe_dbl);
-
-    /*
-    #ifdef DEBUG
-        cout << "fixed x[" << probe_idx << "] = " << probe_value << endl;
-    #endif
-    */
-
-    // if fixing at 1, change vars corresponding to neighbours: continuous, lb=ub=0
-    if (probe_value == true)
-    {
-        for (list<long>::iterator it = instance->conflict_graph_adj_list[probe_idx].begin(); 
-             it != instance->conflict_graph_adj_list[probe_idx].end(); ++it)
-        {
-            x[*it].set(GRB_CharAttr_VType, GRB_CONTINUOUS);
-            x[*it].set(GRB_DoubleAttr_LB, 0);
-            x[*it].set(GRB_DoubleAttr_UB, 0);
-
-            /*
-            #ifdef DEBUG
-                cout << "fixed x[" << *it << "] at zero" << endl;
-            #endif
-            */
-        }
-    }
-
-    model->update();
+    this->fix_var(probe_idx, probe_value);
 
     /*
     #ifdef DEBUG
@@ -310,4 +281,39 @@ pair<ModelStatus,double> Model::probe_var(long probe_idx, bool probe_value)
     */
 
     return make_pair(status,result);
+}
+
+void Model::fix_var(long fix_idx, bool fix_value)
+{
+    /// change given var to continuous and update lb=ub=fix_value
+    double probe_dbl = fix_value == true ? 1.0 : 0.0;         // redundant, but...
+    x[fix_idx].set(GRB_CharAttr_VType, GRB_CONTINUOUS);
+    x[fix_idx].set(GRB_DoubleAttr_LB, probe_dbl);
+    x[fix_idx].set(GRB_DoubleAttr_UB, probe_dbl);
+
+    /*
+    #ifdef DEBUG
+        cout << "fixed x[" << fix_idx << "] = " << fix_value << endl;
+    #endif
+    */
+
+    // if fixing at 1, change vars corresponding to neighbours: continuous, lb=ub=0
+    if (fix_value == true)
+    {
+        for (list<long>::iterator it = instance->conflict_graph_adj_list[fix_idx].begin(); 
+             it != instance->conflict_graph_adj_list[fix_idx].end(); ++it)
+        {
+            x[*it].set(GRB_CharAttr_VType, GRB_CONTINUOUS);
+            x[*it].set(GRB_DoubleAttr_LB, 0);
+            x[*it].set(GRB_DoubleAttr_UB, 0);
+
+            /*
+            #ifdef DEBUG
+                cout << "fixed x[" << fix_idx << "] at zero" << endl;
+            #endif
+            */
+        }
+    }
+
+    model->update();
 }
