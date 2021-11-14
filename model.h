@@ -47,7 +47,7 @@ public:
 
     pair<ModelStatus,double> probe_var(long, bool);
 
-    void fix_var(long, bool);
+    long fix_var(long, bool);
 
 private:
     friend class LDDA;

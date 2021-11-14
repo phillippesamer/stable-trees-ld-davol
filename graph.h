@@ -43,6 +43,10 @@ public:
     void update_single_weight(long,long);
     void update_all_weights(vector<long>);
 
+    void lemon_delete_edge(long);
+    vector<long> lemon_contract_edge(long);
+    bool lemon_graph_modified;
+
     bool mst();
     long mst_weight;
     vector<bool> mst_vector;
@@ -75,8 +79,13 @@ private:
     ListGraph::EdgeMap<long> *lemon_weight;
 
     bool lemon_test_adj(ListGraph &, ListGraph::Node &, ListGraph::Node &);
-    ListGraph::Edge lemon_test_adj_getting_edge(ListGraph &, ListGraph::Node &, ListGraph::Node &);
-    long lemon_contract_dropping_parallel_edges(ListGraph &, ListGraph::EdgeMap<long> &, ListGraph::Node &, ListGraph::Node &);
+    ListGraph::Edge lemon_test_adj_getting_edge(ListGraph &,
+                                                ListGraph::Node &,
+                                                ListGraph::Node &);
+    vector<ListGraph::Edge> lemon_contract_dropping_parallel_edges(ListGraph &,
+                                                                   ListGraph::EdgeMap<long> &,
+                                                                   ListGraph::Node &,
+                                                                   ListGraph::Node &);
 };
 
 #endif

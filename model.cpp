@@ -283,7 +283,7 @@ pair<ModelStatus,double> Model::probe_var(long probe_idx, bool probe_value)
     return make_pair(status,result);
 }
 
-void Model::fix_var(long fix_idx, bool fix_value)
+long Model::fix_var(long fix_idx, bool fix_value)
 {
     /// change given var to continuous and update lb=ub=fix_value
     double probe_dbl = fix_value == true ? 1.0 : 0.0;         // redundant, but...
@@ -296,6 +296,8 @@ void Model::fix_var(long fix_idx, bool fix_value)
         cout << "fixed x[" << fix_idx << "] = " << fix_value << endl;
     #endif
     */
+
+    long num_vars_fixed = 1;
 
     // if fixing at 1, change vars corresponding to neighbours: continuous, lb=ub=0
     if (fix_value == true)
@@ -312,8 +314,11 @@ void Model::fix_var(long fix_idx, bool fix_value)
                 cout << "fixed x[" << fix_idx << "] at zero" << endl;
             #endif
             */
+
+            ++num_vars_fixed;
         }
     }
 
     model->update();
+    return num_vars_fixed;
 }

@@ -4,6 +4,7 @@ Graph::Graph()
 {
     using_matrix = false;
     using_lemon = false;
+    lemon_graph_modified = false;
     num_vertices = 0;
     num_edges = 0;
     mst_weight = 0;
@@ -13,6 +14,7 @@ Graph::Graph(long n, long m)
 {
     using_matrix = false;
     using_lemon = false;
+    lemon_graph_modified = false;
     num_vertices = n;
     num_edges = m;
     mst_weight = numeric_limits<long>::max();   // flag for: mst not computed
@@ -101,6 +103,35 @@ void Graph::update_all_weights(vector<long> new_weights)
         ListGraph::Edge e = this->lemon_edges[i];
         (*lemon_weight)[e] = new_weights[i];
     }
+}
+
+void Graph::lemon_delete_edge(long delete_index)
+{
+    this->lemon_graph_modified = true;
+
+    this->lemon_graph->erase(this->lemon_edges[delete_index]);
+}
+
+vector<long> Graph::lemon_contract_edge(long contract_index)
+{
+    /// Contracts edge and returns the indices of any parallel edge dropped
+
+    this->lemon_graph_modified = true;
+
+    long vertex_1 = this->s[contract_index];
+    long vertex_2 = this->t[contract_index];
+    vector<ListGraph::Edge> dropped_edges = 
+        lemon_contract_dropping_parallel_edges( *lemon_graph,
+                                                *lemon_weight,
+                                                lemon_vertices[vertex_1],
+                                                lemon_vertices[vertex_2] );
+
+    // indices IN THE ORIGINAL GRAPH of parallel edges dropped
+    vector<long> dropped_indices = vector<long>();
+    for (vector<ListGraph::Edge>::iterator it = dropped_edges.begin(); it != dropped_edges.end(); ++it)
+        dropped_indices.push_back( (*lemon_edges_inverted_index)[*it] );
+
+    return dropped_indices;
 }
 
 bool Graph::mst()
@@ -277,7 +308,7 @@ pair<bool,long> Graph::mst_probing_var(long probe_idx, bool probe_value)
         (*this->lemon_edges_inverted_index)[e] = probe_idx;
     }
 
-    // 4. PREPARE RETURN VALUE
+    // 3. PREPARE RETURN VALUE
     bool result_is_tree = true;
     long result_weight = mst_weight;
 
@@ -340,18 +371,18 @@ bool Graph::lemon_test_adj(ListGraph &g, ListGraph::Node &x, ListGraph::Node &y)
     return false;
 }
 
-long Graph::lemon_contract_dropping_parallel_edges(ListGraph &g,
-                                                   ListGraph::EdgeMap<long> &w,
-                                                   ListGraph::Node &x,
-                                                   ListGraph::Node &y)
+vector<ListGraph::Edge> 
+Graph::lemon_contract_dropping_parallel_edges(ListGraph &g,
+                                              ListGraph::EdgeMap<long> &w,
+                                              ListGraph::Node &x,
+                                              ListGraph::Node &y)
 {
     /**
      * wrapper over LEMON, contracting edge xy and keeping only the
      * least-weight (given by w) of any parallel edges
      */
 
-    long deleted_edges = 0;
-    vector<ListGraph::Edge> to_be_deleted;
+    vector<ListGraph::Edge> deleted_edges;
     
     #ifdef DEBUG_CONTRACTION_WRAPPER
         cout << "contracting edge {" << g.id(x) << "," << g.id(y) << "}" << endl;
@@ -406,7 +437,7 @@ long Graph::lemon_contract_dropping_parallel_edges(ListGraph &g,
                         cout << "deleted!" << endl;
                     #endif
                     
-                    to_be_deleted.push_back(edge_from_y);
+                    deleted_edges.push_back(edge_from_y);
                 }
                 else
                 {
@@ -414,9 +445,8 @@ long Graph::lemon_contract_dropping_parallel_edges(ListGraph &g,
                         cout << "kept!" << endl;
                     #endif
 
-                    to_be_deleted.push_back(edge_from_x);
+                    deleted_edges.push_back(edge_from_x);
                 }
-                ++deleted_edges;
             }
             else
             {
@@ -429,16 +459,16 @@ long Graph::lemon_contract_dropping_parallel_edges(ListGraph &g,
 
     // delete parallel edges of larger costs
     #ifdef DEBUG_CONTRACTION_WRAPPER
-        cout << "deleting " << deleted_edges << "=" << to_be_deleted.size() << " edges:" << endl;
+        cout << "deleting " << deleted_edges.size() << " edges:" << endl;
     #endif
 
-    for (long i=0; i<deleted_edges; ++i)
+    for (unsigned long i=0; i<deleted_edges.size(); ++i)
     {
         #ifdef DEBUG_CONTRACTION_WRAPPER
-            cout << "- {" << g.id(g.u(to_be_deleted[i])) << "," << g.id(g.v(to_be_deleted[i])) << "}, weight " << w[to_be_deleted[i]] << endl;
+            cout << "- {" << g.id(g.u(deleted_edges[i])) << "," << g.id(g.v(deleted_edges[i])) << "}, weight " << w[deleted_edges[i]] << endl;
         #endif
 
-        g.erase(to_be_deleted[i]);
+        g.erase(deleted_edges[i]);
     }
 
     #ifdef DEBUG_CONTRACTION_WRAPPER
