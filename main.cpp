@@ -1,3 +1,13 @@
+/***
+ * \file main.cpp
+ * 
+ * Lagrangean Decomposition based dual ascent algorithm to compute lower bounds
+ * for minimum weight stable (or conflict-free) spanning trees.
+ * 
+ * \author Phillippe Samer <phillippes@gmail.com>
+ * \date 01.11.2021
+ */
+
 #include "io.h"
 #include "model.h"
 #include "ldda.h"
@@ -25,7 +35,7 @@ void get_timer()
     unsigned long clock_time = 1.e6 * (clock_stop->tv_sec - clock_start->tv_sec) +
                                       (clock_stop->tv_usec - clock_start->tv_usec);
 
-    printf( "main() says: runtime in seconds\n%.4f\n" , ((double)clock_time / (double)1.e6) );
+    printf( "main() says: runtime in seconds\n%.4f\n", ((double)clock_time / (double)1.e6) );
 
     free(clock_stop);
 }
@@ -53,7 +63,7 @@ int main(int argc, char **argv)
 
     LDDA *lagrangean = new LDDA(instance, model);
     start_timer();
-    lagrangean->dual_ascent();
+    lagrangean->dual_ascent(false);
     get_timer();
 
     // clean up

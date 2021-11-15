@@ -7,18 +7,18 @@ LDDA::LDDA(IO *instance, Model *model)
     this->fixed_vars = vector< pair<long,bool> >();
 
     // initialize multipliers at zero
-    multipliers_log = vector< vector<double> >();
-    multipliers_log.push_back( vector<double>(instance->graph->num_edges, 0.0) );
+    multipliers_log = vector< vector<long> >();
+    multipliers_log.push_back( vector<long>(instance->graph->num_edges, 0) );
 }
 
-LDDA::LDDA(IO *instance, Model *model, vector<double> initial_multipliers)
+LDDA::LDDA(IO *instance, Model *model, vector<long> initial_multipliers)
 {
     this->instance = instance;
     this->model = model;
     this->fixed_vars = vector< pair<long,bool> >();
 
     // use given values as the initial multipliers
-    multipliers_log = vector< vector<double> >();
+    multipliers_log = vector< vector<long> >();
     multipliers_log.push_back(initial_multipliers);
 }
 
@@ -28,29 +28,84 @@ LDDA::~LDDA()
     this->fixed_vars.clear();
 }
 
-double LDDA::edge_deletion_bound()
+long LDDA::edge_deletion_bound()
 {
     return 0;
 }
 
-double LDDA::edge_contraction_bound()
+long LDDA::edge_contraction_bound()
 {
     return 0;
 }
 
-double LDDA::vertex_deletion_bound()
+long LDDA::vertex_deletion_bound()
 {
     return 0;
 }
 
-double LDDA::vertex_fix_bound()
+long LDDA::vertex_fix_bound()
 {
     return 0;
 }
 
-double LDDA::dual_ascent()
+long LDDA::dual_ascent(bool steepest_ascent)
 {
-    // main loop
+    /***
+     * Main loop
+     * The objective function in the Lagrangean Decomposition formulation is
+     * z(\lambda) = min {(w - \lambda) x} + min { \lambda y}, with x taken in
+     * the set of spanning trees in G and y taken in the set of cardinality
+     * |V|-1 stable sets in the conflict graph \hat{G}.
+     */
+
+    bool problem_solved = false;
+    bool multipliers_updated = true;
+
+    long iter = 0;
+
+    do
+    {
+        // 1. SOLVE MST(G, w-lambda^r)
+        // get solution x^r and cost Z_x^r
+
+        // 2. SOLVE KSTAB(\hat{G}, lambda^r)
+        // get solution y^r and cost Z_y^r
+
+        // 3. COLLECT SET OF INDICES OF VARS WHERE THE SOLUTIONS DON'T MATCH
+
+        // 4. TREAT EXCEPTIONS
+
+        // 4.1 THE SET IS EMPTY: THE SOLUTIONS MATCH AND THE PROBLEM IS SOLVED
+
+        // 4.2 IF THE MST SOLUTION IS STABLE, IT IS AN INTEGER FEASIBLE POINT
+
+        // if it has the same lambda^r cost as the kstab, than it is optimal
+
+        // 4.3 IF THE KSTAB SOLUTION IS ACYCLIC, IT IS AN INTEGER FEASIBLE POINT
+
+        // if it has the same lambda^r cost as the kstab, than it is optimal
+
+        // 5. UNLESS WE SOLVED THE PROBLEM, CHOOSE ELEMENT FOR DUAL ASCENT
+        // switch between steepest ascent and first ascent
+        // switch between x^r_e = 1 and y^r_e = 0 and vice versa
+        // determine delta^r_e and del^r_e
+        // if probing finds an infeasible problem, fix corresponding variable
+        // if the maximum step size along e is zero, pick a different element
+
+        // 6. UPDATE MULTIPLIER \lambda^{r+1}_e, COPY THE OTHERS
+
+        // 7. SCREEN LOG
+    }
+    while (!problem_solved && multipliers_updated)
+
+    if (problem_solved)
+    {
+        // original problem is solved
+    }
+    else
+    {
+        // original problem not solved, but no ascent was possible
+    }
 
     //instance->graph->mst();   // ignoring return value, assuming a spanning tree exists
     //model->solve(true);

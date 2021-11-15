@@ -15,21 +15,21 @@ class LDDA
 {
 public:
     LDDA(IO*, Model*);
-    LDDA(IO*, Model*, vector<double>);
+    LDDA(IO*, Model*, vector<long>);
     ~LDDA();
 
-    double dual_ascent();
+    long dual_ascent(bool);
 
 private:
-    vector< vector<double> > multipliers_log;  // lambda[iteration][var_index]
+    vector< vector<long> > multipliers_log;  // lambda[iteration][var_index]
 
     IO *instance;
     Model *model;
 
-    double edge_deletion_bound();
-    double edge_contraction_bound();
-    double vertex_deletion_bound();
-    double vertex_fix_bound();
+    long edge_deletion_bound();
+    long edge_contraction_bound();
+    long vertex_deletion_bound();
+    long vertex_fix_bound();
 
     void print_edge_weights();
 
