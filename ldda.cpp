@@ -117,7 +117,7 @@ bool LDDA::dual_ascent(bool steepest_ascent)
         if (mismatch.empty())
         {
             cout << "the solutions to both subproblems are the same" << endl;
-                 << "problem solved to optimality" << endl;
+            cout << "problem solved to optimality" << endl;
 
             return true;
         }
@@ -147,14 +147,14 @@ bool LDDA::dual_ascent(bool steepest_ascent)
             if (cost_in_other_subproblem == model->solution_weight)
             {
                 cout << "the mst solution is primal feasible and dual optimal" << endl;
-                     << "problem solved to optimality" << endl;
+                cout << "problem solved to optimality" << endl;
 
                 return true;
             }
         }
 
         // 4.3 IF THE KSTAB SOLUTION IS ACYCLIC, IT IS AN INTEGER FEASIBLE POINT
-        if ( instance->test_acyclic(model->solution_vector) )
+        if ( instance->test_acyclic_kstab(model->solution_vector) )
         {
             // store integer feasible solution
             

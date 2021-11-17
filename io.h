@@ -33,8 +33,9 @@ public:
     long num_vertices() { return graph->num_vertices; }
     long num_edges() { return graph->num_edges; }
 
-    bool test_stability(vector<bool>);
-    bool test_acyclic(vector<bool>);
+    bool test_stability(vector<bool> &);
+    bool test_acyclic(vector<bool> &);
+    bool test_acyclic_kstab(vector<bool> &);
 
 private:
     friend class Model;
@@ -49,6 +50,8 @@ private:
     vector< pair<long,long> > conflicts;  // conflicting edges (indices)
 
     vector< list<long> > conflict_graph_adj_list;
+
+    void dfs_checking_acyclic(long, long, vector<bool>&, long&, vector<bool>&, bool&);
 };
 
 #endif

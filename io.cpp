@@ -176,7 +176,7 @@ bool IO::parse_gcclib(const char *filename)
     return true;
 }
 
-bool IO::test_stability(vector<bool> point)
+bool IO::test_stability(vector<bool> &point)
 {
     /// tests if an incidence vector satisfies all conflict constraints
     for ( vector< pair<long,long> >::iterator it = this->conflicts.begin();
@@ -191,9 +191,101 @@ bool IO::test_stability(vector<bool> point)
     return true;
 }
 
-bool IO::test_acyclic(vector<bool> point)
+bool IO::test_acyclic(vector<bool> &point)
 {
     /// tests if an incidence vector induces an acyclic subgraph
 
-    return true;    
+    bool acyclic = true;
+
+    vector<bool> check = vector<bool>(graph->num_vertices, false);
+    long checked_count = 0;
+
+    // the search starts only once, if the subgraph is connected/acyclic
+    long source = 0;
+    while (source < graph->num_vertices && acyclic && checked_count < graph->num_vertices)
+    {
+        #ifdef DEBUG_DFS
+            cout << "source = " << source << endl;
+        #endif
+
+        if (!check[source])
+        {
+            #ifdef DEBUG_DFS
+                cout << "dfs starting!" << endl << endl;
+            #endif
+            dfs_checking_acyclic(source, -1, check, checked_count, point, acyclic);
+        }
+
+        ++source;
+    }
+
+    #ifdef DEBUG_DFS
+        cout << "acyclic = " << acyclic << endl;
+        cout << "check vector: { ";
+        for (long i=0; i<graph->num_vertices; ++i) cout << check[i] << " ";
+        cout << "}" << endl;
+        cout << "checked_count = " << checked_count << endl;
+    #endif
+
+    return acyclic;
+}
+
+bool IO::test_acyclic_kstab(vector<bool> &point)
+{
+    /***
+     * Tests if an incidence vector of num_vertices - 1 edges induces an
+     * acyclic/connected subgraph.
+     */
+
+    bool acyclic = true;
+
+    vector<bool> check = vector<bool>(graph->num_vertices, false);
+    long checked_count = 0;
+
+    // the search starts only once, if the subgraph is connected/acyclic
+    dfs_checking_acyclic(0, -1, check, checked_count, point, acyclic);
+
+    #ifdef DEBUG_DFS
+        cout << "acyclic = " << (checked_count == graph->num_vertices) << endl;
+        cout << "check vector: { ";
+        for (long i=0; i<graph->num_vertices; ++i) cout << check[i] << " ";
+        cout << "}" << endl;
+        cout << "checked_count = " << checked_count << endl;
+    #endif
+
+    return (checked_count == graph->num_vertices);
+}
+
+void IO::dfs_checking_acyclic(long u,
+                              long parent,
+                              vector<bool> &check,
+                              long &checked_count,
+                              vector<bool> &active_edges,
+                              bool &acyclic)
+{
+    /// dfs to check if the subgraph induced by active edges is acyclic
+
+    check[u] = true;
+    ++checked_count;
+
+    list<long>::iterator it = graph->adj_list[u].begin();
+    while (it != graph->adj_list[u].end() && acyclic)
+    {
+        long v = (*it);
+        
+        // considering only active edges
+        long idx = graph->index_matrix[u][v];
+        if (active_edges[idx])
+        {
+            if (!check[v])
+                dfs_checking_acyclic(v, u, check, checked_count, active_edges, acyclic);
+            else if (v != parent)
+            {
+                // vertex (not the antecessor) already visited: back edge!
+                acyclic = false;
+            }
+        }
+
+        ++it;
+    }
 }
