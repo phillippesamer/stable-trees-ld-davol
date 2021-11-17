@@ -59,7 +59,6 @@ int main(int argc, char **argv)
     }
 
     Model *model = new Model(instance);
-    //model->solve(true);
 
     LDDA *lagrangean = new LDDA(instance, model);
     start_timer();

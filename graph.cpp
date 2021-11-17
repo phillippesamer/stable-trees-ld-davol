@@ -19,14 +19,19 @@ Graph::Graph(long n, long m)
     num_edges = m;
     mst_weight = numeric_limits<long>::max();   // flag for: mst not computed
 
-    this->s.reserve(m);
-    this->t.reserve(m);
-    this->w.reserve(m);
-    this->mst_vector.reserve(m);
+    adj_list.reserve(n);
+    adj_list.insert( adj_list.begin(), n, list<long>() );
+
+    s.reserve(m);
+    t.reserve(m);
+    w.reserve(m);
+    mst_vector.reserve(m);
 }
 
 Graph::~Graph()
 {
+    adj_list.clear();
+
     s.clear();
     t.clear();
     w.clear();
@@ -158,7 +163,6 @@ bool Graph::mst()
     mst_timer.start();
     vector<ListGraph::Edge> tree_edges;
     this->mst_weight = kruskal(*lemon_graph, *lemon_weight, back_inserter(tree_edges));
-    mst_timer.halt();
 
     // store 0-1 vector indicating which edges are in the MST
     this->mst_vector.clear();
@@ -169,6 +173,9 @@ bool Graph::mst()
         long edge_index = (*lemon_edges_inverted_index)[*it];
         this->mst_vector[edge_index] = true;
     }
+
+    mst_timer.halt();
+    this->mst_runtime = mst_timer.realTime();    
 
     #ifdef DEBUG_MST
         cout << "MST weight = " << this->mst_weight << endl;

@@ -2,6 +2,7 @@
 #define _LDDA_H_
 
 #include "model.h"
+#include <algorithm>
 
 /***
  * \file ldda.h
@@ -18,11 +19,15 @@ public:
     LDDA(IO*, Model*, vector<long>);
     ~LDDA();
 
-    long dual_ascent(bool);
+    bool dual_ascent(bool);
+    vector< vector<long> > multipliers_log;  // lambda[iteration][var_index]
+    vector<long> bound_log;
+    vector< pair<long, vector<bool> > > solution_pool; // feasible points found
+
+    vector< pair<long,bool> > fixed_vars;   // vars fixed during execution
+    IO* flush_fixes_to_instance();
 
 private:
-    vector< vector<long> > multipliers_log;  // lambda[iteration][var_index]
-
     IO *instance;
     Model *model;
 
@@ -33,7 +38,7 @@ private:
 
     void print_edge_weights();
 
-    vector< pair<long,bool> > fixed_vars;   // vars fixed during execution
+    vector<long> original_weights;
 };
 
 #endif

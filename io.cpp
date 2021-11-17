@@ -40,7 +40,7 @@ bool IO::parse_gcclib(const char *filename)
         input_fh >> num_edges;
         input_fh >> this->num_conflicts;
 
-        // initialize graph adjacency list, edge list and lemon object
+        // initialize graph (own structures and lemon object)
         delete graph;
         this->graph = new Graph(num_vertices,num_edges);
         this->graph->init_index_matrix();
@@ -55,7 +55,7 @@ bool IO::parse_gcclib(const char *filename)
         // m lines for edges in the instance graph
         for (long line_idx=0; line_idx<num_edges; ++line_idx)
         {
-            // read edge terminal nodes and weight: i j w  (incidentally, i<j)
+            // read edge terminal vertices and weight: i j w  (incidentally, i<j)
             long i, j, w;
             
             input_fh >> i;
@@ -66,6 +66,9 @@ bool IO::parse_gcclib(const char *filename)
             
             input_fh >> w;
             graph->w.push_back(w);
+
+            graph->adj_list[i].push_back(j);
+            graph->adj_list[j].push_back(i);
             
             // should never happen
             if (graph->index_matrix[i][j] >= 0 ||
@@ -171,4 +174,26 @@ bool IO::parse_gcclib(const char *filename)
     */
 
     return true;
+}
+
+bool IO::test_stability(vector<bool> point)
+{
+    /// tests if an incidence vector satisfies all conflict constraints
+    for ( vector< pair<long,long> >::iterator it = this->conflicts.begin();
+          it != this->conflicts.end(); ++it )
+    {
+        long e1 = (*it).first;
+        long e2 = (*it).second;
+        if (point[e1] && point[e2])
+            return false;
+    }
+
+    return true;
+}
+
+bool IO::test_acyclic(vector<bool> point)
+{
+    /// tests if an incidence vector induces an acyclic subgraph
+
+    return true;    
 }

@@ -50,6 +50,7 @@ public:
     bool mst();
     long mst_weight;
     vector<bool> mst_vector;
+    double mst_runtime;
 
     pair<bool,long> mst_probing_var(long, bool);
 
@@ -60,6 +61,9 @@ private:
 
     long num_vertices;
     long num_edges;
+
+    // adjacency list
+    vector< list<long> > adj_list;
 
     // edge list
     vector<long> s;        // terminal node 1

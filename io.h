@@ -29,9 +29,13 @@ public:
     ~IO();
     
     bool parse_gcclib(const char *);
+
     long num_vertices() { return graph->num_vertices; }
     long num_edges() { return graph->num_edges; }
-    
+
+    bool test_stability(vector<bool>);
+    bool test_acyclic(vector<bool>);
+
 private:
     friend class Model;
     friend class LDDA;
