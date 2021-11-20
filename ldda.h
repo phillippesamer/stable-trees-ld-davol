@@ -20,6 +20,10 @@ public:
     ~LDDA();
 
     bool dual_ascent(bool);
+    bool problem_solved;
+    bool iter_update;
+    long iter;
+
     vector< vector<long> > multipliers_log;  // lambda[iteration][var_index]
     vector<long> bound_log;
     vector< pair<long, vector<bool> > > solution_pool; // feasible points found
@@ -39,6 +43,10 @@ private:
     void print_edge_weights();
 
     vector<long> original_weights;
+
+    long contracted_edges_weight;
+    vector<long> contracted_edges;
+    vector<bool> contracted_edges_mask;
 };
 
 #endif

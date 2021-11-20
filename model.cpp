@@ -241,17 +241,26 @@ pair<ModelStatus,double> Model::probe_var(long probe_idx, bool probe_value)
 
     // save optimization status (optimal/infeasible) and result, if optimal
     ModelStatus status = STATUS_UNKNOWN;
-    double result = numeric_limits<double>::max();
+    long result = numeric_limits<long>::max();
 
     if (model->get(GRB_IntAttr_Status) == GRB_OPTIMAL)
     {
         status = AT_OPTIMUM;
-        result = model->get(GRB_DoubleAttr_ObjVal);
+
+        // the weights are integral, so the optimal value should also be
+        double optval = model->get(GRB_DoubleAttr_ObjVal);
+        result = (long) optval;
+        if (floor(optval) - optval != 0)
+        {
+            status = STATUS_UNKNOWN;
+            cout << "Unexpected error: probe_var(idx=" << probe_idx << ", value=" << probe_value << ") ";
+            cout << "got optimal value " << optval << " (not integral!)" << endl << endl;
+        }
     }
     else if (model->get(GRB_IntAttr_Status) == GRB_INFEASIBLE)
     {
         status = IS_INFEASIBLE;
-        result = numeric_limits<double>::max();
+        result = numeric_limits<long>::max();
     }
     else
         cout << "Unexpected error: probe_var(idx=" << probe_idx << ", value=" << probe_value << ") got neither optimal nor infeasible model" << endl;
@@ -283,7 +292,7 @@ pair<ModelStatus,double> Model::probe_var(long probe_idx, bool probe_value)
     return make_pair(status,result);
 }
 
-long Model::fix_var(long fix_idx, bool fix_value)
+vector<long> Model::fix_var(long fix_idx, bool fix_value)
 {
     /// change given var to continuous and update lb=ub=fix_value
     double probe_dbl = fix_value == true ? 1.0 : 0.0;         // redundant, but...
@@ -297,7 +306,7 @@ long Model::fix_var(long fix_idx, bool fix_value)
     #endif
     */
 
-    long num_vars_fixed = 1;
+    vector<long> conflicting_vars = vector<long>();
 
     // if fixing at 1, change vars corresponding to neighbours: continuous, lb=ub=0
     if (fix_value == true)
@@ -315,10 +324,11 @@ long Model::fix_var(long fix_idx, bool fix_value)
             #endif
             */
 
-            ++num_vars_fixed;
+            conflicting_vars.push_back(*it);
         }
     }
 
     model->update();
-    return num_vars_fixed;
+
+    return conflicting_vars;
 }

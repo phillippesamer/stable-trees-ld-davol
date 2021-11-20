@@ -45,9 +45,9 @@ public:
     void update_single_weight(long,long);
     void update_all_weights(vector<long>);
 
-    pair<ModelStatus,double> probe_var(long, bool);
+    pair<ModelStatus,long> probe_var(long, bool);
 
-    long fix_var(long, bool);
+    vector<long> fix_var(long, bool);
 
 private:
     friend class LDDA;

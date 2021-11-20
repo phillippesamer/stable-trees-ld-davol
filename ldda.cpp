@@ -8,6 +8,10 @@ LDDA::LDDA(IO *instance, Model *model)
     this->bound_log = vector<long>();
     this->solution_pool = vector< pair<long, vector<bool> > >();
 
+    this->contracted_edges_weight = 0;
+    this->contracted_edges = vector<long>();
+    this->contracted_edges_mask = vector<bool>(instance->graph->num_edges, false);
+
     // backup original weights to restore later
     original_weights = vector<long>(instance->graph->w);
 
@@ -24,6 +28,10 @@ LDDA::LDDA(IO *instance, Model *model, vector<long> initial_multipliers)
     this->bound_log = vector<long>();
     this->solution_pool = vector< pair<long, vector<bool> > >();
 
+    this->contracted_edges_weight = 0;
+    this->contracted_edges = vector<long>();
+    this->contracted_edges_mask = vector<bool>(instance->graph->num_edges, false);
+
     // backup original weights to restore later
     original_weights = vector<long>(instance->graph->w);
 
@@ -39,6 +47,8 @@ LDDA::~LDDA()
     this->bound_log.clear();
     this->original_weights.clear();
     this->solution_pool.clear();
+    this->contracted_edges.clear();
+    this->contracted_edges_mask.clear();
 }
 
 bool LDDA::dual_ascent(bool steepest_ascent)
@@ -53,7 +63,7 @@ bool LDDA::dual_ascent(bool steepest_ascent)
      * if some step failed.
      */
 
-    // initialize weights with lagrangean multipliers
+    // 0. INITIALIZE WEIGHTS WITH LAGRANGEAN MULTIPLIERS
 
     // args: source1 begin, source1 end, source2 begin, dest begin, operator
     transform( instance->graph->w.begin(),
@@ -63,10 +73,8 @@ bool LDDA::dual_ascent(bool steepest_ascent)
                minus<long>() );
 
     #ifdef DEBUG
-        cout << "w contains: ";
-        for (vector<long>::iterator it = instance->graph->w.begin(); it != instance->graph->w.end(); ++it)
-            cout << *it << " ";
-        cout << endl;
+        cout << "initial mst objective vector: ";
+        print_edge_weights();
     #endif
 
     instance->graph->update_all_weights(instance->graph->w);
@@ -75,12 +83,13 @@ bool LDDA::dual_ascent(bool steepest_ascent)
 
     // TO DO: ANYTHING ELSE ON THE FIRST RUN?
 
-    bool problem_solved = false;
-    bool multipliers_updated = true;
-    long iter = 0;
+    iter = 1;
+    problem_solved = false;
 
     do
     {
+        iter_update = false;
+
         // 1. SOLVE MST(G, w-lambda^r)
         if (instance->graph->mst() == false)
         {
@@ -88,9 +97,17 @@ bool LDDA::dual_ascent(bool steepest_ascent)
             cout << "infeasible problem instance" << endl;
             return false;
         }
-        //long mst_weight = instance->graph->mst_weight;
-        //vector<bool> mst_vector = instance->graph->mst_vector;
-        //double mst_runtime = instance->graph->mst_runtime;
+
+        /* For separation of concerns purposes, edges contracted by LDDA (in
+         * the LEMON data structure only!) are missing in later spanning trees,
+         * so we include them here
+         */
+        instance->graph->mst_weight += contracted_edges_weight;
+        for ( vector<long>::iterator it = contracted_edges.begin();
+              it != contracted_edges.end(); ++it )
+        {
+            instance->graph->mst_vector[*it] = true;
+        }
 
         // 2. SOLVE KSTAB(\hat{G}, lambda^r)
         if (model->solve(true) <= 0 || model->solution_status != AT_OPTIMUM)
@@ -99,17 +116,28 @@ bool LDDA::dual_ascent(bool steepest_ascent)
             cout << "infeasible problem instance" << endl;
             return false;
         }
-        //long kstab_weight = model->solution_weight;
-        //vector<bool> kstab_vector = model->solution_vector;
-        //double kstab_runtime = model->solution_runtime;
 
         // 3. COLLECT SET OF INDICES OF VARS WHERE THE SOLUTIONS DON'T MATCH
         vector<long> mismatch;
         for (long idx=0; idx < instance->graph->num_edges; ++idx)
         {
             if (instance->graph->mst_vector[idx] != model->solution_vector[idx])
+            {
                 mismatch.push_back(idx);
+
+                #ifdef DEBUG
+                    if (contracted_edges_mask[idx])
+                    {
+                        cout << "UNEXPECTED ERROR: solutions differ in an "
+                             << "index corresponding to a contracted edge"
+                             << endl;
+                        return false;
+                    }
+                #endif
+            }
         }
+
+        long mismatch_count = mismatch.size();
 
         // 4. TREAT EXCEPTIONS
 
@@ -118,6 +146,8 @@ bool LDDA::dual_ascent(bool steepest_ascent)
         {
             cout << "the solutions to both subproblems are the same" << endl;
             cout << "problem solved to optimality" << endl;
+
+            problem_solved = true;
 
             return true;
         }
@@ -149,6 +179,8 @@ bool LDDA::dual_ascent(bool steepest_ascent)
                 cout << "the mst solution is primal feasible and dual optimal" << endl;
                 cout << "problem solved to optimality" << endl;
 
+                problem_solved = true;
+
                 return true;
             }
         }
@@ -156,23 +188,253 @@ bool LDDA::dual_ascent(bool steepest_ascent)
         // 4.3 IF THE KSTAB SOLUTION IS ACYCLIC, IT IS AN INTEGER FEASIBLE POINT
         if ( instance->test_acyclic_kstab(model->solution_vector) )
         {
-            // store integer feasible solution
-            
+            // store solution and its cost (wrt original weights)
+            long true_cost = 0;
+            long cost_in_other_subproblem = 0;
+            for (long idx=0; idx < instance->graph->num_edges; ++idx)
+            {
+                // if y(idx) = 1
+                if (model->solution_vector[idx])
+                {
+                    true_cost += original_weights[idx];
+                    cost_in_other_subproblem += ( original_weights[idx]
+                                                - multipliers_log.back()[idx] );
+                }
+            }
+
+            this->solution_pool.push_back( make_pair(true_cost, model->solution_vector) );
+
+            cout << "the kstab solution is primal feasible" << endl;
+            cout << "integer feasible point of weight " << true_cost << endl;
+
             // if it has the same (w-lambda^r) cost as the mst, than it is optimal
+            if (cost_in_other_subproblem == instance->graph->mst_weight)
+            {
+                cout << "the kstab solution is primal feasible and dual optimal" << endl;
+                cout << "problem solved to optimality" << endl;
+
+                problem_solved = true;
+
+                return true;
+            }
         }
 
         // 5. UNLESS WE SOLVED THE PROBLEM, CHOOSE ELEMENT FOR DUAL ASCENT
-        // switch between steepest ascent and first ascent
-        // switch between x^r_e = 1 and y^r_e = 0 and vice versa
-        // determine delta^r_e and del^r_e
-        // if probing finds an infeasible problem, fix corresponding variable (save this on fixed_vars), pick new one
-        // if the maximum step size along e is zero, pick a different element
+
+        long chosen_direction = -1;
+        long chosen_adjustment = -1;
+        long chosen_bound_improvement = -1;
+
+        if (steepest_ascent)
+        {
+            /* 5.1 STEEPEST ASCENT
+             * Evaluate each maximal ascent direction, and follow the one
+             * yielding the greatest bound
+             */
+
+            for (vector<long>::iterator current_direction = mismatch.begin();
+                 current_direction != mismatch.end(); ++current_direction)
+            {
+                // CASE 1: X^r_e = 1 AND Y^r_e = 0 (INOC2022, THM 4.3)
+                if (instance->graph->mst_vector[*current_direction])
+                {
+                    #ifdef DEBUG
+                        cout << "x^" << iter << "_" << *current_direction 
+                             << " = 1 > 0 = y^"  << iter << "_"
+                             << *current_direction << endl;
+
+                        if (model->solution_vector[*current_direction])
+                        {
+                            cout << "UNEXPECTED ERROR: ";
+                            cout << "x^" << iter << "_" << *current_direction
+                                 << "  =  1  =  y^"  << iter << "_"
+                                 << *current_direction << endl;
+                            return false;
+                        }
+                    #endif
+
+                    // PROBING MST WITHOUT e TO DETERMINE \del^r_e
+                    pair<bool,long> probing_mst = 
+                        instance->graph->mst_probing_var(*current_direction, false);
+
+                    // probing var at 0 infeasible => fix var at 1 
+                    if (probing_mst.first == false)
+                    {
+                        iter_update = true;
+                        fixed_vars.push_back( make_pair(*current_direction, true) );
+
+                        cout << "probing var x[" << *current_direction 
+                             << "] = 0 gives a disconnected graph" << endl;
+                        cout << "fixing element at one throughout" << endl;
+
+                        contracted_edges_weight += original_weights[*current_direction];
+                        contracted_edges.push_back(*current_direction);
+                        contracted_edges_mask[*current_direction] = true;
+
+                        // i. contract edge in the graph (might return parallel edges dropped)
+                        vector<long> dropped_edges = 
+                            instance->graph->lemon_contract_edge(*current_direction);
+
+                        if (!dropped_edges.empty())
+                        {
+                            #ifdef DEBUG
+                            cout << "edge contraction implied dropping ("
+                                 << dropped_edges.size() ") parallel edges"
+                                 << endl;
+                            #endif
+
+                            // fix corresponding model vars at zero
+                            for (vector<long>::iterator it = dropped_edges.begin();
+                                 it != dropped_edges.end(); ++it)
+                            {
+                                fixed_vars.push_back( make_pair(*it, false) );
+                                model->fix_var(*it, false);
+                            }
+                        }
+
+                        // ii. fix var = 1 in the model (also fix conflicting edges at 0)
+                        vector<long> conflicting_vars = 
+                            model->fix_var(*current_direction, true);
+
+                        if (!conflicting_vars.empty())
+                        {
+                            #ifdef DEBUG
+                            cout << "fix var at 1 implied fixing ("
+                                 << conflicting_vars.size() ") conflicting edges"
+                                 << endl;
+                            #endif
+
+                            // remove corresponding graph edges
+                            for (vector<long>::iterator it = conflicting_vars.begin();
+                                 it != conflicting_vars.end(); ++it)
+                            {
+                                fixed_vars.push_back( make_pair(*it, false) );
+                                instance->graph->lemon_delete_edge(*it);
+                            }
+                        }
+                    }
+                    else
+                    {
+                        // PROBING KSTAB FORCING e TO DETERMINE \delta^r_e
+                        pair<ModelStatus,long> probing_kstab = 
+                            model->probe_var(*current_direction, true);
+
+                        // probing var at 1 infeasible => fix var at 0
+                        if (probing_kstab.first == IS_INFEASIBLE)
+                        {
+                            iter_update = true;
+                            fixed_vars.push_back( make_pair(*current_direction, false) );
+
+                            cout << "probing var y[" << *current_direction 
+                                 << "] = 1 gives an infeasible model (runtime: "
+                                 << model->runtime() << " s)" << endl;
+                            cout << "fixing element at zero throughout" << endl;
+
+                            model->fix_var(*current_direction, false);
+                            instance->graph->lemon_delete_edge(*current_direction);
+                        }
+                        else if (probing_kstab.first == STATUS_UNKNOWN)
+                        {
+                            cout << "probing var y[" << *current_direction << "] = 1 failed" 
+                            << " (runtime: " << model->runtime() << " s)" << endl;
+
+                            return false;
+                        }
+                        else
+                        {
+                            // probings found feasible solutions => proceed to compute the bounds
+
+                            // NB! contracted edges do not appear in Graph::mst_probing_var()
+                            long probing_mst_bound = probing_mst.second + contracted_edges_weight;
+                            long probing_kstab_bound = probing_kstab.second;
+
+                            long del = probing_mst_bound - instance->graph->mst_weight;
+                            long delta = probing_kstab_bound - model->solution_weight;
+
+                            #ifdef DEBUG
+                                if (min(del,delta) < 0)
+                                    cout << "UNEXPECTED ERROR: min(delta,del) < 0" << endl;
+                            #endif
+
+                            if ( min(del,delta) > 0 &&
+                                 min(del,delta) > chosen_bound_improvement )
+                            {
+                                iter_update = true;
+
+                                chosen_direction = *current_direction;
+                                chosen_adjustment = (-1)*min(del,delta);
+                                chosen_bound_improvement = min(del,delta);
+                            }
+                        }
+                    }
+                }
+
+                // CASE 2: x^r_e = 0 and y^r_e = 1
+                else
+                {
+                    #ifdef DEBUG
+                        cout << "x^" << iter << "_" << *current_direction 
+                             << " = 0 < 1 = y^"  << iter << "_"
+                             << *current_direction << endl;
+
+                        if (!model->solution_vector[*current_direction])
+                        {
+                            cout << "UNEXPECTED ERROR: ";
+                            cout << "x^" << iter << "_" << *current_direction
+                                 << "  =  0  =  y^"  << iter << "_"
+                                 << *current_direction << endl;
+                            return false;
+                        }
+                    #endif
+
+                    // determine delta^r_e and del^r_e  (INOC2022, Thm 4.2)
+
+                }
+
+
+
+
+
+
+
+
+            }
+
+        }
+        else
+        {
+            /* 5.2 "FIRST" ASCENT
+             * Follow the first maximal ascent direction available. To impose
+             * an order on the set of mismatching variables (and seeking not to
+             * favour some throughout execution), we use the iteration number
+             * mod the cardinality of the mismatch set.
+             */
+
+            //start at iter % mismatch_count
+            //do
+            // { evaluate step size in this direction } while(not found and not out of directions)
+            //save direction and step size
+
+            // switch between x^r_e = 1 and y^r_e = 0 and vice versa
+            // determine delta^r_e and del^r_e
+            // if probing finds an infeasible problem, fix corresponding variable (save this on fixed_vars), pick new one
+        }
+
+        if (chosen_direction < 0 && !iter_update)
+        {
+            // no direction admits a positive step size - the procedure is over
+            cout << "none of the " << mismatch_count << " directions admits a "
+                 << "positive step size"<< endl;
+            cout << "dual ascent done" << endl;
+
+            return true;
+        }
 
         // 6. UPDATE MULTIPLIER \lambda^{r+1}_e, COPY THE OTHERS
 
         // 7. SCREEN LOG
     }
-    while (!problem_solved && multipliers_updated);
+    while (!problem_solved && iter_update);
 
     if (problem_solved)
     {
@@ -182,52 +444,6 @@ bool LDDA::dual_ascent(bool steepest_ascent)
     {
         // original problem not solved, but no ascent was possible
     }
-
-
-
-
-
-    // mst probing
-    /*
-    cout << endl;
-    for (long i=0; i < instance->num_edges(); i++)
-    {
-        pair<bool,long> probing = instance->graph->mst_probing_var(i,false);
-        cout << "probing x[" << i << "]=" << 0 << " gives (" << probing.first << "," << probing.second << ")" << endl;
-    }
-    cout << endl;
-    */
-
-    cout << endl;
-    for (long i=0; i < instance->num_edges(); i++)
-    {
-        pair<ModelStatus,double> probing = model->probe_var(i,true);
-        if (probing.first == AT_OPTIMUM)
-        {
-            cout << "probing var x[" << i << "] = " << true << " gives ObjVal=" << probing.second 
-            << " (runtime: " << model->runtime() << " s)" << endl;
-        }
-        else if (probing.first == IS_INFEASIBLE)
-        {
-            cout << "probing var x[" << i << "] = 0 gives an infeasible model" 
-            << " (runtime: " << model->runtime() << " s)" << endl;
-        }
-    }
-    cout << endl;
-
-    /*
-    long m = instance->graph->num_edges;
-
-    print_edge_weights();
-
-    for (long i=0; i<m; ++i)
-        instance->graph->update_single_weight(i,10*i);
-    print_edge_weights();
-
-    instance->graph->update_all_weights( vector<long>(m, -1) );
-    print_edge_weights();
-
-    */
 
     return true;
 }
