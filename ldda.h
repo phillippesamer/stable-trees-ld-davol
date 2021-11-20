@@ -35,10 +35,10 @@ private:
     IO *instance;
     Model *model;
 
-    long edge_deletion_bound();
+    pair<bool,long> edge_deletion_bound(long);
     long edge_contraction_bound();
     long vertex_deletion_bound();
-    long vertex_fix_bound();
+    pair<bool,long> vertex_fix_bound(long);
 
     void print_edge_weights();
 
