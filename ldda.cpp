@@ -81,11 +81,12 @@ bool LDDA::dual_ascent(bool steepest_ascent)
 
     model->update_all_weights(multipliers_log[0]);
 
-    iter = 1;
+    iter = 0;
     problem_solved = false;
 
     do
     {
+        ++iter;
         iter_update = false;
 
         // 1. SOLVE MST(G, w-lambda^r)
@@ -148,6 +149,7 @@ bool LDDA::dual_ascent(bool steepest_ascent)
 
             problem_solved = true;
 
+            // TO DO: any reason not to return here? e.g. logging?
             return true;
         }
 
@@ -180,6 +182,7 @@ bool LDDA::dual_ascent(bool steepest_ascent)
 
                 problem_solved = true;
 
+                // TO DO: any reason not to return here? e.g. logging?
                 return true;
             }
         }
@@ -214,6 +217,7 @@ bool LDDA::dual_ascent(bool steepest_ascent)
 
                 problem_solved = true;
 
+                // TO DO: any reason not to return here? e.g. logging?
                 return true;
             }
         }
@@ -397,35 +401,38 @@ bool LDDA::dual_ascent(bool steepest_ascent)
             ++attempt;
         }
 
-        if (chosen_direction < 0 && !iter_update)
-        {
-            // no direction admits a positive step size - the procedure is over
-            cout << "none of the " << mismatch.size() << " directions admits a "
-                 << "positive step size"<< endl;
-            cout << "dual ascent done" << endl;
-
-            return true;
-        }
-
         // 6. UPDATE MULTIPLIER \lambda^{r+1}_e, COPY THE OTHERS
 
+        if (chosen_direction > 0)
+        {
+            // data structures in this object
+            vector<long> next_multipliers = vector<long>( multipliers_log.back() );
+            next_multipliers[chosen_direction] = next_multipliers[chosen_direction] + chosen_adjustment;
+            multipliers_log.push_back(next_multipliers);
+
+            long new_bound = bound_log.back() + chosen_bound_improvement;
+            bound_log.push_back(new_bound);
+
+            // update objective in mst subproblem: w_e - lambda_e
+            instance->graph->update_single_weight(chosen_direction,
+                original_weights[chosen_direction] - next_multipliers[chosen_direction]);
+
+            // update objective in kstab subproblem: lambda_e
+            model->update_single_weight(chosen_direction,
+                next_multipliers[chosen_direction]);
+        }
+
         // 7. SCREEN LOG
-
-
-
-
-        ++iter;
+        cout << "iter\t bound\t multipliers { ... }" << endl;
+        cout <<  iter << "\t " << bound_log.back() << "\t { ";
+        for (long idx=0; idx < instance->graph->num_edges; ++idx)
+            cout << multipliers_log.back().at(idx) << " ";
+        cout << " }" << endl;
     }
-    while (!problem_solved && iter_update);
+    while (iter_update);
 
-    if (problem_solved)
-    {
-        // original problem is solved
-    }
-    else
-    {
-        // original problem not solved, but no ascent was possible
-    }
+    // no direction admits a positive step size - the procedure is over
+    cout << endl << "dual ascent done" << endl;
 
     return true;
 }
