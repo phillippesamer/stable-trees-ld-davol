@@ -81,8 +81,6 @@ bool LDDA::dual_ascent(bool steepest_ascent)
 
     model->update_all_weights(multipliers_log[0]);
 
-    // TO DO: ANYTHING ELSE ON THE FIRST RUN?
-
     iter = 1;
     problem_solved = false;
 
@@ -137,9 +135,7 @@ bool LDDA::dual_ascent(bool steepest_ascent)
             }
         }
 
-        long mismatch_count = mismatch.size();
-
-        // 4. TREAT EXCEPTIONS
+        // 4. CHECK PRIMAL FEASIBILITY OF SOLUTIONS TO SUBPROBLEMS
 
         // 4.1 THE SET IS EMPTY: THE SOLUTIONS MATCH AND THE PROBLEM IS SOLVED
         if (mismatch.empty())
@@ -228,8 +224,8 @@ bool LDDA::dual_ascent(bool steepest_ascent)
         if (steepest_ascent)
         {
             /* 5.1 STEEPEST ASCENT
-             * Evaluate each maximal ascent direction, and follow the one
-             * yielding the greatest bound
+             * Evaluate each ascent direction, and follow the one yielding 
+             * the greatest bound
              */
 
             for (vector<long>::iterator current_direction = mismatch.begin();
@@ -284,7 +280,10 @@ bool LDDA::dual_ascent(bool steepest_ascent)
 
                             #ifdef DEBUG
                                 if (min(del,delta) < 0)
-                                    cout << "UNEXPECTED ERROR: min(delta,del) < 0" << endl;
+                                {
+                                    cout << "UNEXPECTED ERROR: min( delta=" << delta << ", del=" << del <<" ) < 0" << endl;
+                                    return false;
+                                }
                             #endif
 
                             if ( min(del,delta) > 0 &&
@@ -300,7 +299,7 @@ bool LDDA::dual_ascent(bool steepest_ascent)
                     }
                 }
 
-                // CASE 2: x^r_e = 0 and y^r_e = 1
+                // case 2: x^r_e = 0 and y^r_e = 1 (inoc2022, thm 4.2)
                 else
                 {
                     #ifdef DEBUG
@@ -318,17 +317,63 @@ bool LDDA::dual_ascent(bool steepest_ascent)
                         }
                     #endif
 
-                    // determine delta^r_e and del^r_e  (INOC2022, Thm 4.2)
+                    // PROBING MST FORCING e TO DETERMINE \del^r_e
+                    pair<bool,long> probing_mst = edge_contraction_bound(*current_direction);
 
+                    // contracting an edge does not make a connected graph disconnected
+                    if (probing_mst.first == false)
+                    {
+                        cout << "UNEXPECTED ERROR: ";
+                        cout << "probing x^" << iter << "_" << *current_direction
+                             << "  =  1 (edge contraction) gave disconnected graph"
+                             << endl;
+                        return false;
+                    }
+
+                    // PROBING KSTAB WITHOUT e TO DETERMINE \delta^r_e
+                    pair<ModelStatus,long> probing_kstab
+                        = vertex_deletion_bound(*current_direction);
+
+                    // the call above took care of the case where the probe is infeasible
+                    if (probing_kstab.first == STATUS_UNKNOWN)
+                    {
+                        cout << "probing var y[" << *current_direction << "] = 0 failed" 
+                        << " (runtime: " << model->runtime() << " s)" << endl;
+
+                        return false;
+                    }
+                    else if (probing_kstab.first == AT_OPTIMUM)
+                    {
+                        // probings found feasible solutions => proceed to compute the bounds
+
+                        // NB! contracted edges do not appear in Graph::mst_probing_var()
+                        long probing_mst_bound = probing_mst.second + contracted_edges_weight;
+                        long probing_kstab_bound = probing_kstab.second;
+
+                        long del = probing_mst_bound - instance->graph->mst_weight;
+                        long delta = probing_kstab_bound - model->solution_weight;
+
+                        #ifdef DEBUG
+                            if (min(del,delta) < 0)
+                            {
+                                cout << "UNEXPECTED ERROR: min( delta=" << delta << ", del=" << del <<" ) < 0" << endl;
+                                return false;
+                            }
+                        #endif
+
+                        if ( min(del,delta) > 0 &&
+                             min(del,delta) > chosen_bound_improvement )
+                        {
+                            iter_update = true;
+
+                            chosen_direction = *current_direction;
+                            chosen_adjustment = min(del,delta);
+                            chosen_bound_improvement = min(del,delta);
+                        }
+                    }
                 }
 
-
-
-
-
-
-
-
+                // done evaluating this direction (= mismatching variable)
             }
 
         }
@@ -341,7 +386,7 @@ bool LDDA::dual_ascent(bool steepest_ascent)
              * mod the cardinality of the mismatch set.
              */
 
-            //start at iter % mismatch_count
+            //start at iter % mismatch.size()
             //do
             // { evaluate step size in this direction } while(not found and not out of directions)
             //save direction and step size
@@ -354,7 +399,7 @@ bool LDDA::dual_ascent(bool steepest_ascent)
         if (chosen_direction < 0 && !iter_update)
         {
             // no direction admits a positive step size - the procedure is over
-            cout << "none of the " << mismatch_count << " directions admits a "
+            cout << "none of the " << mismatch.size() << " directions admits a "
                  << "positive step size"<< endl;
             cout << "dual ascent done" << endl;
 
@@ -388,70 +433,41 @@ pair<bool,long> LDDA::edge_deletion_bound(long idx)
     // probing var at 0 infeasible => fix var at 1 
     if (probing_mst.first == false)
     {
-        iter_update = true;
-        fixed_vars.push_back( make_pair(idx, true) );
-
         cout << "probing var x[" << idx << "] = 0 gives a disconnected graph ";
         cout << "=> fixing element at one throughout" << endl;
 
-        contracted_edges_weight += original_weights[idx];
-        contracted_edges.push_back(idx);
-        contracted_edges_mask[idx] = true;
-
-        // 1. CONTRACT EDGE IN THE GRAPH (MIGHT RETURN PARALLEL EDGES DROPPED)
-        vector<long> dropped_edges = instance->graph->lemon_contract_edge(idx);
-
-        if (!dropped_edges.empty())
-        {
-            #ifdef DEBUG
-            cout << "edge contraction implied dropping (" << dropped_edges.size()
-                 << ") parallel edges" << endl;
-            #endif
-
-            // fix corresponding model vars at zero
-            for (vector<long>::iterator it = dropped_edges.begin();
-                 it != dropped_edges.end(); ++it)
-            {
-                fixed_vars.push_back( make_pair(*it, false) );
-                model->fix_var(*it, false);
-            }
-        }
-
-        // 2. FIX VAR = 1 IN THE MODEL (ALSO FIX CONFLICTING EDGES AT 0)
-        vector<long> conflicting_vars = model->fix_var(idx, true);
-
-        if (!conflicting_vars.empty())
-        {
-            #ifdef DEBUG
-            cout << "fix var at 1 implied fixing (" << conflicting_vars.size()
-                 << ") conflicting edges" << endl;
-            #endif
-
-            // remove corresponding graph edges
-            for (vector<long>::iterator it = conflicting_vars.begin();
-                 it != conflicting_vars.end(); ++it)
-            {
-                fixed_vars.push_back( make_pair(*it, false) );
-                instance->graph->lemon_delete_edge(*it);
-            }
-        }
+        fix_element_at_one_in_graph_and_model(idx);
     }
 
     return probing_mst;
 }
 
-long LDDA::edge_contraction_bound()
+pair<bool,long> LDDA::edge_contraction_bound(long idx)
 {
-    // TO DO: all
-    
-    return 0;
+    /// probing mst forcing given edge to determine \del^r_e in Thm 4.2 (INOC)
+
+    pair<bool,long> probing_mst = instance->graph->mst_probing_var(idx, true);
+
+    return probing_mst;
 }
 
-long LDDA::vertex_deletion_bound()
+pair<bool,long> LDDA::vertex_deletion_bound(long idx)
 {
-    // TO DO: all
-    
-    return 0;
+    /// probing kstab without a vertex to determine \delta^r_e in Thm 4.2 (INOC)
+
+    pair<ModelStatus,long> probing_kstab = model->probe_var(idx, false);
+
+    // probing var at 0 infeasible => fix var at 1
+    if (probing_kstab.first == IS_INFEASIBLE)
+    {
+        cout << "probing var y[" << idx << "] = 0 gives an infeasible model "
+             << "(runtime: " << model->runtime() << " s)";
+        cout << " => fixing element at one throughout" << endl;
+
+        fix_element_at_one_in_graph_and_model(idx);
+    }
+
+    return probing_kstab;
 }
 
 pair<bool,long> LDDA::vertex_fix_bound(long idx)
@@ -475,6 +491,60 @@ pair<bool,long> LDDA::vertex_fix_bound(long idx)
     }
 
     return probing_kstab;
+}
+
+void LDDA::fix_element_at_one_in_graph_and_model(long idx)
+{
+    /***
+     * Implement an edge contraction and model variable fix at 1, handling
+     * possible implications. Used by both edge_deletion_bound() and
+     * vertex_deletion_bound().
+     */
+
+    iter_update = true;
+    fixed_vars.push_back( make_pair(idx, true) );
+
+    contracted_edges_weight += original_weights[idx];
+    contracted_edges.push_back(idx);
+    contracted_edges_mask[idx] = true;
+
+    // 1. CONTRACT EDGE IN THE GRAPH (MIGHT RETURN PARALLEL EDGES DROPPED)
+    vector<long> dropped_edges = instance->graph->lemon_contract_edge(idx);
+
+    if (!dropped_edges.empty())
+    {
+        #ifdef DEBUG
+        cout << "edge contraction implied dropping (" << dropped_edges.size()
+             << ") parallel edges" << endl;
+        #endif
+
+        // fix corresponding model vars at zero
+        for (vector<long>::iterator it = dropped_edges.begin();
+             it != dropped_edges.end(); ++it)
+        {
+            fixed_vars.push_back( make_pair(*it, false) );
+            model->fix_var(*it, false);
+        }
+    }
+
+    // 2. FIX VAR = 1 IN THE MODEL (ALSO FIX CONFLICTING EDGES AT 0)
+    vector<long> conflicting_vars = model->fix_var(idx, true);
+
+    if (!conflicting_vars.empty())
+    {
+        #ifdef DEBUG
+        cout << "fix var at 1 implied fixing (" << conflicting_vars.size()
+             << ") conflicting edges" << endl;
+        #endif
+
+        // remove corresponding graph edges
+        for (vector<long>::iterator it = conflicting_vars.begin();
+             it != conflicting_vars.end(); ++it)
+        {
+            fixed_vars.push_back( make_pair(*it, false) );
+            instance->graph->lemon_delete_edge(*it);
+        }
+    }
 }
 
 IO* LDDA::flush_fixes_to_instance()
