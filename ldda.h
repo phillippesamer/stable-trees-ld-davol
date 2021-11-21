@@ -37,8 +37,8 @@ private:
 
     pair<bool,long> edge_deletion_bound(long);
     pair<bool,long> edge_contraction_bound(long);
-    pair<bool,long> vertex_deletion_bound(long);
-    pair<bool,long> vertex_fix_bound(long);
+    pair<ModelStatus,long> vertex_deletion_bound(long);
+    pair<ModelStatus,long> vertex_fix_bound(long);
     void fix_element_at_one_in_graph_and_model(long);
 
     void print_edge_weights();

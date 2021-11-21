@@ -89,6 +89,7 @@ bool LDDA::dual_ascent(bool steepest_ascent)
         iter_update = false;
 
         // 1. SOLVE MST(G, w-lambda^r)
+
         if (instance->graph->mst() == false)
         {
             cout << "Graph::mst() failed (graph is not connected)" << endl;
@@ -108,6 +109,7 @@ bool LDDA::dual_ascent(bool steepest_ascent)
         }
 
         // 2. SOLVE KSTAB(\hat{G}, lambda^r)
+
         if (model->solve(true) <= 0 || model->solution_status != AT_OPTIMUM)
         {
             cout << "Model::solve() failed" << endl;
@@ -116,6 +118,7 @@ bool LDDA::dual_ascent(bool steepest_ascent)
         }
 
         // 3. COLLECT SET OF INDICES OF VARS WHERE THE SOLUTIONS DON'T MATCH
+
         vector<long> mismatch;
         for (long idx=0; idx < instance->graph->num_edges; ++idx)
         {
@@ -215,129 +218,63 @@ bool LDDA::dual_ascent(bool steepest_ascent)
             }
         }
 
-        // 5. UNLESS WE SOLVED THE PROBLEM, CHOOSE ELEMENT FOR DUAL ASCENT
+        /* 5. UNLESS WE SOLVED THE PROBLEM, CHOOSE ELEMENT FOR DUAL ASCENT
+         *
+         * STEEPEST ASCENT: evaluate each ascent direction, and follow the one
+         * yielding the greatest bound.
+         * 
+         * FIRST ASCENT: follow the first maximal ascent direction available.
+         * To impose an order on the set of mismatching variables (and seeking
+         * not to favour some of them throughout execution), we start indexing
+         * from the iteration number (and mod out by the cardinality of the
+         * mismatch set).
+         */
 
         long chosen_direction = -1;
         long chosen_adjustment = -1;
         long chosen_bound_improvement = -1;
 
-        if (steepest_ascent)
+        unsigned long attempt = 0;
+        long attempting_idx = (iter-1) % mismatch.size();  // starting direction
+
+        bool done_with_first_ascent = false;
+
+        while ( !done_with_first_ascent && attempt < mismatch.size() )
         {
-            /* 5.1 STEEPEST ASCENT
-             * Evaluate each ascent direction, and follow the one yielding 
-             * the greatest bound
-             */
+            long current_direction = mismatch[attempting_idx];
 
-            for (vector<long>::iterator current_direction = mismatch.begin();
-                 current_direction != mismatch.end(); ++current_direction)
+            // case 1: x^r_e = 1 and y^r_e = 0 (inoc2022, thm 4.3)
+            if (instance->graph->mst_vector[current_direction])
             {
-                // case 1: x^r_e = 1 and y^r_e = 0 (inoc2022, thm 4.3)
-                if (instance->graph->mst_vector[*current_direction])
-                {
-                    #ifdef DEBUG
-                        cout << "x^" << iter << "_" << *current_direction 
-                             << " = 1 > 0 = y^"  << iter << "_"
-                             << *current_direction << endl;
+                #ifdef DEBUG
+                    cout << "x^" << iter << "_" << current_direction 
+                         << " = 1 > 0 = y^"  << iter << "_"
+                         << current_direction << endl;
 
-                        if (model->solution_vector[*current_direction])
-                        {
-                            cout << "UNEXPECTED ERROR: ";
-                            cout << "x^" << iter << "_" << *current_direction
-                                 << "  =  1  =  y^"  << iter << "_"
-                                 << *current_direction << endl;
-                            return false;
-                        }
-                    #endif
-
-                    // PROBING MST WITHOUT e TO DETERMINE \del^r_e
-                    pair<bool,long> probing_mst = edge_deletion_bound(*current_direction);
-
-                    // the call above took care of the case where the probe is infeasible
-                    if (probing_mst.first == true)
-                    {
-                        // PROBING KSTAB FORCING e TO DETERMINE \delta^r_e
-                        pair<ModelStatus,long> probing_kstab
-                            = vertex_fix_bound(*current_direction);
-
-                        // the call above took care of the case where the probe is infeasible
-                        if (probing_kstab.first == STATUS_UNKNOWN)
-                        {
-                            cout << "probing var y[" << *current_direction << "] = 1 failed" 
-                            << " (runtime: " << model->runtime() << " s)" << endl;
-
-                            return false;
-                        }
-                        else if (probing_kstab.first == AT_OPTIMUM)
-                        {
-                            // probings found feasible solutions => proceed to compute the bounds
-
-                            // NB! contracted edges do not appear in Graph::mst_probing_var()
-                            long probing_mst_bound = probing_mst.second + contracted_edges_weight;
-                            long probing_kstab_bound = probing_kstab.second;
-
-                            long del = probing_mst_bound - instance->graph->mst_weight;
-                            long delta = probing_kstab_bound - model->solution_weight;
-
-                            #ifdef DEBUG
-                                if (min(del,delta) < 0)
-                                {
-                                    cout << "UNEXPECTED ERROR: min( delta=" << delta << ", del=" << del <<" ) < 0" << endl;
-                                    return false;
-                                }
-                            #endif
-
-                            if ( min(del,delta) > 0 &&
-                                 min(del,delta) > chosen_bound_improvement )
-                            {
-                                iter_update = true;
-
-                                chosen_direction = *current_direction;
-                                chosen_adjustment = (-1)*min(del,delta);
-                                chosen_bound_improvement = min(del,delta);
-                            }
-                        }
-                    }
-                }
-
-                // case 2: x^r_e = 0 and y^r_e = 1 (inoc2022, thm 4.2)
-                else
-                {
-                    #ifdef DEBUG
-                        cout << "x^" << iter << "_" << *current_direction 
-                             << " = 0 < 1 = y^"  << iter << "_"
-                             << *current_direction << endl;
-
-                        if (!model->solution_vector[*current_direction])
-                        {
-                            cout << "UNEXPECTED ERROR: ";
-                            cout << "x^" << iter << "_" << *current_direction
-                                 << "  =  0  =  y^"  << iter << "_"
-                                 << *current_direction << endl;
-                            return false;
-                        }
-                    #endif
-
-                    // PROBING MST FORCING e TO DETERMINE \del^r_e
-                    pair<bool,long> probing_mst = edge_contraction_bound(*current_direction);
-
-                    // contracting an edge does not make a connected graph disconnected
-                    if (probing_mst.first == false)
+                    if (model->solution_vector[current_direction])
                     {
                         cout << "UNEXPECTED ERROR: ";
-                        cout << "probing x^" << iter << "_" << *current_direction
-                             << "  =  1 (edge contraction) gave disconnected graph"
-                             << endl;
+                        cout << "x^" << iter << "_" << current_direction
+                             << "  =  1  =  y^"  << iter << "_"
+                             << current_direction << endl;
                         return false;
                     }
+                #endif
 
-                    // PROBING KSTAB WITHOUT e TO DETERMINE \delta^r_e
+                // PROBING MST WITHOUT e TO DETERMINE \del^r_e
+                pair<bool,long> probing_mst = edge_deletion_bound(current_direction);
+
+                // the call above took care of the case where the probe is infeasible
+                if (probing_mst.first == true)
+                {
+                    // PROBING KSTAB FORCING e TO DETERMINE \delta^r_e
                     pair<ModelStatus,long> probing_kstab
-                        = vertex_deletion_bound(*current_direction);
+                        = vertex_fix_bound(current_direction);
 
                     // the call above took care of the case where the probe is infeasible
                     if (probing_kstab.first == STATUS_UNKNOWN)
                     {
-                        cout << "probing var y[" << *current_direction << "] = 0 failed" 
+                        cout << "probing var y[" << current_direction << "] = 1 failed" 
                         << " (runtime: " << model->runtime() << " s)" << endl;
 
                         return false;
@@ -366,34 +303,98 @@ bool LDDA::dual_ascent(bool steepest_ascent)
                         {
                             iter_update = true;
 
-                            chosen_direction = *current_direction;
-                            chosen_adjustment = min(del,delta);
+                            chosen_direction = current_direction;
+                            chosen_adjustment = (-1)*min(del,delta);
                             chosen_bound_improvement = min(del,delta);
+
+                            if (!steepest_ascent)
+                                done_with_first_ascent = true;
                         }
                     }
                 }
-
-                // done evaluating this direction (= mismatching variable)
             }
 
-        }
-        else
-        {
-            /* 5.2 "FIRST" ASCENT
-             * Follow the first maximal ascent direction available. To impose
-             * an order on the set of mismatching variables (and seeking not to
-             * favour some throughout execution), we use the iteration number
-             * mod the cardinality of the mismatch set.
-             */
+            // case 2: x^r_e = 0 and y^r_e = 1 (inoc2022, thm 4.2)
+            else
+            {
+                #ifdef DEBUG
+                    cout << "x^" << iter << "_" << current_direction 
+                         << " = 0 < 1 = y^"  << iter << "_"
+                         << current_direction << endl;
 
-            //start at iter % mismatch.size()
-            //do
-            // { evaluate step size in this direction } while(not found and not out of directions)
-            //save direction and step size
+                    if (!model->solution_vector[current_direction])
+                    {
+                        cout << "UNEXPECTED ERROR: ";
+                        cout << "x^" << iter << "_" << current_direction
+                             << "  =  0  =  y^"  << iter << "_"
+                             << current_direction << endl;
+                        return false;
+                    }
+                #endif
 
-            // switch between x^r_e = 1 and y^r_e = 0 and vice versa
-            // determine delta^r_e and del^r_e
-            // if probing finds an infeasible problem, fix corresponding variable (save this on fixed_vars), pick new one
+                // PROBING MST FORCING e TO DETERMINE \del^r_e
+                pair<bool,long> probing_mst = edge_contraction_bound(current_direction);
+
+                // contracting an edge does not make a connected graph disconnected
+                if (probing_mst.first == false)
+                {
+                    cout << "UNEXPECTED ERROR: ";
+                    cout << "probing x^" << iter << "_" << current_direction
+                         << "  =  1 (edge contraction) gave disconnected graph"
+                         << endl;
+                    return false;
+                }
+
+                // PROBING KSTAB WITHOUT e TO DETERMINE \delta^r_e
+                pair<ModelStatus,long> probing_kstab
+                    = vertex_deletion_bound(current_direction);
+
+                // the call above took care of the case where the probe is infeasible
+                if (probing_kstab.first == STATUS_UNKNOWN)
+                {
+                    cout << "probing var y[" << current_direction << "] = 0 failed" 
+                    << " (runtime: " << model->runtime() << " s)" << endl;
+
+                    return false;
+                }
+                else if (probing_kstab.first == AT_OPTIMUM)
+                {
+                    // probings found feasible solutions => proceed to compute the bounds
+
+                    // NB! contracted edges do not appear in Graph::mst_probing_var()
+                    long probing_mst_bound = probing_mst.second + contracted_edges_weight;
+                    long probing_kstab_bound = probing_kstab.second;
+
+                    long del = probing_mst_bound - instance->graph->mst_weight;
+                    long delta = probing_kstab_bound - model->solution_weight;
+
+                    #ifdef DEBUG
+                        if (min(del,delta) < 0)
+                        {
+                            cout << "UNEXPECTED ERROR: min( delta=" << delta << ", del=" << del <<" ) < 0" << endl;
+                            return false;
+                        }
+                    #endif
+
+                    if ( min(del,delta) > 0 &&
+                         min(del,delta) > chosen_bound_improvement )
+                    {
+                        iter_update = true;
+
+                        chosen_direction = current_direction;
+                        chosen_adjustment = min(del,delta);
+                        chosen_bound_improvement = min(del,delta);
+
+                        if (!steepest_ascent)
+                            done_with_first_ascent = true;
+                    }
+                }
+            }
+
+            // done evaluating this direction (i.e. mismatching variable)
+
+            attempting_idx = (attempting_idx+1) % mismatch.size();
+            ++attempt;
         }
 
         if (chosen_direction < 0 && !iter_update)
@@ -409,6 +410,11 @@ bool LDDA::dual_ascent(bool steepest_ascent)
         // 6. UPDATE MULTIPLIER \lambda^{r+1}_e, COPY THE OTHERS
 
         // 7. SCREEN LOG
+
+
+
+
+        ++iter;
     }
     while (!problem_solved && iter_update);
 
@@ -451,7 +457,7 @@ pair<bool,long> LDDA::edge_contraction_bound(long idx)
     return probing_mst;
 }
 
-pair<bool,long> LDDA::vertex_deletion_bound(long idx)
+pair<ModelStatus,long> LDDA::vertex_deletion_bound(long idx)
 {
     /// probing kstab without a vertex to determine \delta^r_e in Thm 4.2 (INOC)
 
@@ -470,7 +476,7 @@ pair<bool,long> LDDA::vertex_deletion_bound(long idx)
     return probing_kstab;
 }
 
-pair<bool,long> LDDA::vertex_fix_bound(long idx)
+pair<ModelStatus,long> LDDA::vertex_fix_bound(long idx)
 {
     /// probing kstab forcing a vertex to determine \delta^r_e in Thm 4.3 (INOC)
 

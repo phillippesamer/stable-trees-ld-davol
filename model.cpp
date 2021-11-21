@@ -224,7 +224,7 @@ void Model::update_all_weights(vector<long> new_weights)
     */
 }
 
-pair<ModelStatus,double> Model::probe_var(long probe_idx, bool probe_value)
+pair<ModelStatus,long> Model::probe_var(long probe_idx, bool probe_value)
 {
     // change given var to continuous and update lb=ub=probe
     this->fix_var(probe_idx, probe_value);
