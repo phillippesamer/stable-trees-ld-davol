@@ -125,14 +125,16 @@ int Model::solve(bool logging)
             }
 
             #ifdef DEBUG
-                cout << "Model optimal weight: " << this->solution_weight << endl;
+                cout << "Model optimal weight: " << this->solution_weight;
             #endif
 
             // save bool vector of this solution
 
+            /*
             #ifdef DEBUG
                 cout << "Model optimal vector: " << endl;
             #endif
+            */
 
             for (long i=0; i < instance->graph->num_edges; ++i)
             {
@@ -144,13 +146,14 @@ int Model::solve(bool logging)
                 else
                     this->solution_vector.push_back(false);
 
+                /*
                 #ifdef DEBUG
                     cout << this->solution_vector.back();
                 #endif
+                */
             }
             #ifdef DEBUG
-                cout << endl;
-                cout << "Model runtime: " << solution_runtime << endl;
+                cout << " (runtime: " << solution_runtime << ")" << endl;
             #endif
 
             // returning number of solutions (likely sub-optimal), in case it's useful later

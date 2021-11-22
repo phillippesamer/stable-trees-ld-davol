@@ -15,9 +15,11 @@ LDDA::LDDA(IO *instance, Model *model)
     // backup original weights to restore later
     original_weights = vector<long>(instance->graph->w);
 
-    // initialize multipliers at zero
+    // initialize multipliers at one
     multipliers_log = vector< vector<long> >();
-    multipliers_log.push_back( vector<long>(instance->graph->num_edges, 0) );
+    multipliers_log.push_back( vector<long>(instance->graph->num_edges, 0) ); //////////// !!!!!!!!!!!!!!!!!  //////////// !!!!!!!!!!!!!!!!!  //////////// !!!!!!!!!!!!!!!!!
+    for (long idx=0; idx < instance->graph->num_edges; ++idx)
+        multipliers_log[0][idx] = (long) pow(-1, idx)*(idx % 3);
 }
 
 LDDA::LDDA(IO *instance, Model *model, vector<long> initial_multipliers)
@@ -73,6 +75,7 @@ bool LDDA::dual_ascent(bool steepest_ascent)
                minus<long>() );
 
     #ifdef DEBUG
+        cout << endl << "DUAL ASCENT STARTED" << endl << endl;
         cout << "initial mst objective vector: ";
         print_edge_weights();
     #endif
@@ -88,6 +91,10 @@ bool LDDA::dual_ascent(bool steepest_ascent)
     {
         ++iter;
         iter_update = false;
+
+        #ifdef DEBUG
+            cout << endl << "ITERATION #" << iter << endl << endl;
+        #endif
 
         // 1. SOLVE MST(G, w-lambda^r)
 
@@ -111,12 +118,16 @@ bool LDDA::dual_ascent(bool steepest_ascent)
 
         // 2. SOLVE KSTAB(\hat{G}, lambda^r)
 
-        if (model->solve(true) <= 0 || model->solution_status != AT_OPTIMUM)
+        if (model->solve(false) <= 0 || model->solution_status != AT_OPTIMUM)
         {
             cout << "Model::solve() failed" << endl;
             cout << "infeasible problem instance" << endl;
             return false;
         }
+
+        // now we can determine the lagrangean bound corresponding to the first multipliers
+        if (iter == 1)
+            bound_log.push_back(instance->graph->mst_weight + model->solution_weight);
 
         // 3. COLLECT SET OF INDICES OF VARS WHERE THE SOLUTIONS DON'T MATCH
 
@@ -234,6 +245,10 @@ bool LDDA::dual_ascent(bool steepest_ascent)
          * mismatch set).
          */
 
+        #ifdef DEBUG
+            cout << "SEARCH FOR ASCENT DIRECTION STARTING" << endl;
+        #endif
+
         long chosen_direction = -1;
         long chosen_adjustment = -1;
         long chosen_bound_improvement = -1;
@@ -251,9 +266,11 @@ bool LDDA::dual_ascent(bool steepest_ascent)
             if (instance->graph->mst_vector[current_direction])
             {
                 #ifdef DEBUG
+                    /*
                     cout << "x^" << iter << "_" << current_direction 
                          << " = 1 > 0 = y^"  << iter << "_"
                          << current_direction << endl;
+                    */
 
                     if (model->solution_vector[current_direction])
                     {
@@ -271,6 +288,12 @@ bool LDDA::dual_ascent(bool steepest_ascent)
                 // the call above took care of the case where the probe is infeasible
                 if (probing_mst.first == true)
                 {
+                    /*
+                    #ifdef DEBUG
+                        cout << "mst probing bound (includes contracted weight): " << probing_mst.second + contracted_edges_weight << endl;
+                    #endif
+                    */
+
                     // PROBING KSTAB FORCING e TO DETERMINE \delta^r_e
                     pair<ModelStatus,long> probing_kstab
                         = vertex_fix_bound(current_direction);
@@ -285,6 +308,12 @@ bool LDDA::dual_ascent(bool steepest_ascent)
                     }
                     else if (probing_kstab.first == AT_OPTIMUM)
                     {
+                        /*
+                        #ifdef DEBUG
+                            cout << "kstab probing bound: " << probing_kstab.second << endl;
+                        #endif
+                        */
+
                         // probings found feasible solutions => proceed to compute the bounds
 
                         // NB! contracted edges do not appear in Graph::mst_probing_var()
@@ -300,6 +329,10 @@ bool LDDA::dual_ascent(bool steepest_ascent)
                                 cout << "UNEXPECTED ERROR: min( delta=" << delta << ", del=" << del <<" ) < 0" << endl;
                                 return false;
                             }
+                            /*
+                            else
+                                cout << "delta = " << delta << ", del = " << del << endl;
+                            */
                         #endif
 
                         if ( min(del,delta) > 0 &&
@@ -322,9 +355,11 @@ bool LDDA::dual_ascent(bool steepest_ascent)
             else
             {
                 #ifdef DEBUG
+                    /*
                     cout << "x^" << iter << "_" << current_direction 
                          << " = 0 < 1 = y^"  << iter << "_"
                          << current_direction << endl;
+                    */
 
                     if (!model->solution_vector[current_direction])
                     {
@@ -349,6 +384,12 @@ bool LDDA::dual_ascent(bool steepest_ascent)
                     return false;
                 }
 
+                /*
+                #ifdef DEBUG
+                    cout << "mst probing bound (includes contracted weight): " << probing_mst.second + contracted_edges_weight << endl;
+                #endif
+                */
+
                 // PROBING KSTAB WITHOUT e TO DETERMINE \delta^r_e
                 pair<ModelStatus,long> probing_kstab
                     = vertex_deletion_bound(current_direction);
@@ -363,6 +404,12 @@ bool LDDA::dual_ascent(bool steepest_ascent)
                 }
                 else if (probing_kstab.first == AT_OPTIMUM)
                 {
+                    /*
+                    #ifdef DEBUG
+                        cout << "kstab probing bound: " << probing_kstab.second << endl;
+                    #endif
+                    */
+
                     // probings found feasible solutions => proceed to compute the bounds
 
                     // NB! contracted edges do not appear in Graph::mst_probing_var()
@@ -378,6 +425,10 @@ bool LDDA::dual_ascent(bool steepest_ascent)
                             cout << "UNEXPECTED ERROR: min( delta=" << delta << ", del=" << del <<" ) < 0" << endl;
                             return false;
                         }
+                        /*
+                        else
+                            cout << "delta = " << delta << ", del = " << del << endl;
+                        */
                     #endif
 
                     if ( min(del,delta) > 0 &&
@@ -401,6 +452,14 @@ bool LDDA::dual_ascent(bool steepest_ascent)
             ++attempt;
         }
 
+        #ifdef DEBUG
+            cout << "SEARCH FOR DIRECTION COMPLETE (" << attempt << " ATTEMPTS)" << endl;
+            cout << "chosen_direction = " << chosen_direction
+                 << ", chosen_adjustment = " << chosen_adjustment
+                 << ", chosen_bound_improvement = " << chosen_bound_improvement
+                 << endl;
+        #endif
+
         // 6. UPDATE MULTIPLIER \lambda^{r+1}_e, COPY THE OTHERS
 
         if (chosen_direction > 0)
@@ -420,19 +479,30 @@ bool LDDA::dual_ascent(bool steepest_ascent)
             // update objective in kstab subproblem: lambda_e
             model->update_single_weight(chosen_direction,
                 next_multipliers[chosen_direction]);
+
+
+            // 7. SCREEN LOG
+            cout << "iter\t bound\t";
+            //if (!multipliers_log.empty())
+                cout << "multipliers { ... }";
+            cout << endl;
+
+            cout <<  iter << "\t " << bound_log.back() << "\t";
+            //if (!multipliers_log.empty()) 
+            //{
+                cout << " { ";
+                for (long idx=0; idx < instance->graph->num_edges; ++idx)
+                    cout << (multipliers_log.back()).at(idx) << " ";
+                cout << " }";
+            //}
+            cout << endl;
         }
 
-        // 7. SCREEN LOG
-        cout << "iter\t bound\t multipliers { ... }" << endl;
-        cout <<  iter << "\t " << bound_log.back() << "\t { ";
-        for (long idx=0; idx < instance->graph->num_edges; ++idx)
-            cout << multipliers_log.back().at(idx) << " ";
-        cout << " }" << endl;
     }
     while (iter_update);
 
     // no direction admits a positive step size - the procedure is over
-    cout << endl << "dual ascent done" << endl;
+    cout << endl << "DUAL ASCENT DONE AFTER " << iter << " ITERATIONS" << endl << endl;
 
     return true;
 }
@@ -572,9 +642,9 @@ IO* LDDA::flush_fixes_to_instance()
 void LDDA::print_edge_weights()
 {
     // print current weights (in MST subproblem)
-    cout << endl << "edge list weights: ";
+    cout << endl << "multipliers: ";
     for (long idx=0; idx < instance->graph->num_edges; ++idx)
-        cout << this->instance->graph->w[idx] << " ";
+        cout << this->multipliers_log.back()[idx] << " ";
 
     cout << endl << "lemonlist weights: ";
     for (long idx=0; idx < instance->graph->num_edges; ++idx)
