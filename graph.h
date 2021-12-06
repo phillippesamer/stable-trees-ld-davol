@@ -23,7 +23,7 @@ using namespace lemon;
  * Optimization in Networks), so as to use the highly efficient implementations
  * of algorithms they offer
  * 
- * IO, KStabModel and LDDA classes are declared friends to avoid cumbersome get/set calls.
+ * Some classes are declared friends to avoid cumbersome get/set calls.
  * 
  * \author Phillippe Samer <phillippes@gmail.com>
  * \date 01.11.2021
@@ -57,6 +57,7 @@ public:
 private:
     friend class IO;
     friend class KStabModel;
+    friend class StableSpanningTreeModel;
     friend class LDDA;
 
     long num_vertices;

@@ -17,7 +17,7 @@ using namespace std;
  * Module for input and output functionality, including a Graph object for
  * main data structures.
  * 
- * KStabModel and LDDA are declared friends to avoid cumbersome get/set calls.
+ * Some classes are declared friends to avoid cumbersome get/set calls.
  * 
  * \author Phillippe Samer <phillippes@gmail.com>
  * \date 01.11.2021
@@ -39,6 +39,7 @@ public:
 
 private:
     friend class KStabModel;
+    friend class StableSpanningTreeModel;
     friend class LDDA;
 
     // instance data

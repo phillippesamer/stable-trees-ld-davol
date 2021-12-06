@@ -10,6 +10,7 @@
 
 #include "io.h"
 #include "kstab_model.h"
+#include "mstcc_model.h"
 #include "ldda.h"
 
 #include <cstdlib>
@@ -59,23 +60,28 @@ int main(int argc, char **argv)
         return 0;
     }
 
+    // LP relaxation bound
+    StableSpanningTreeModel *lpr_model = new StableSpanningTreeModel(instance);
+    if (lpr_model->solve_lp_relax(true))
+    {
+        cout << "_____________________________________________________________________________" << endl << endl;
+        cout << "lp_bound = " << lpr_model->lp_bound
+             << " (runtime: " << lpr_model->lp_runtime << ")" << endl;
+        cout << "_____________________________________________________________________________" << endl << endl;
+
+        // TODO: check acyclic solution
+    }
+    delete lpr_model;
+
+    // Lagrangean Decomposition bound
     KStabModel *model = new KStabModel(instance);
     LDDA *lagrangean = new LDDA(instance, model);
 
-    /*
-    if (model->solve_full_lp_relax(true))
-    {
-        cout << "lp_bound = " << model->full_lp_bound << "(runtime: " << model->full_lp_runtime << ")" << endl;
-        // TODO: check acyclic solution
-    }
-    */
-
-    //*
     start_timer();
     lagrangean->dual_ascent(false);
     get_timer();
 
-    // write log to file
+    // write log file (input file name + "_ldda.log")
     stringstream log = lagrangean->create_log();
 
     char buffer[200];
@@ -91,13 +97,12 @@ int main(int argc, char **argv)
         cout << log.str();
         cout << "ERROR: unable to write log file; dumped to screen" << endl;
     }
-    //*/
 
     // clean up
     free(clock_start);
     delete lagrangean;
-    delete instance;
     delete model;
+    delete instance;
 
     return 0;
 }

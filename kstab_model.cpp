@@ -36,7 +36,7 @@ void KStabModel::create_variables()
 
     // binary selection of each vertex (edge in the original graph)
     x = new GRBVar[instance->graph->num_edges];
-    for(long i=0; i < instance->graph->num_edges; i++)
+    for (long i=0; i < instance->graph->num_edges; i++)
     {
         sprintf(buffer, "x_%ld", i);
         x[i] = model->addVar(0.0, 1.0, 1.0, GRB_BINARY, buffer);
@@ -50,7 +50,7 @@ void KStabModel::create_constraints()
 
     // 1. FIXED CARDINALITY CONSTRAINT
     GRBLinExpr fix_card = 0;
-    for(long i=0; i < instance->graph->num_edges; i++)
+    for (long i=0; i < instance->graph->num_edges; i++)
         fix_card += x[i];
 
     cname.str("");
@@ -58,7 +58,7 @@ void KStabModel::create_constraints()
     model->addConstr(fix_card == this->fixed_cardinality, cname.str());
 
     // 2. EDGE INEQUALITIES
-    for(long e=0; e < instance->num_conflicts; e++)
+    for (long e=0; e < instance->num_conflicts; e++)
     {
         long u = instance->conflicts[e].first;
         long v = instance->conflicts[e].second;
@@ -79,7 +79,7 @@ void KStabModel::create_objective()
 {
     GRBLinExpr objective_expression = 0;
 
-    for(long i = 0; i < instance->graph->num_edges; i++)
+    for (long i = 0; i < instance->graph->num_edges; i++)
         objective_expression += (instance->graph->w[i])*x[i];
 
     model->setObjective(objective_expression, GRB_MINIMIZE);

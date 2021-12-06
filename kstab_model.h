@@ -49,7 +49,7 @@ public:
 
     vector<long> fix_var(long, bool);
 
-private:
+protected:
     friend class LDDA;
 
     IO *instance;
