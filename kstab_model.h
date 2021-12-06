@@ -1,5 +1,5 @@
-#ifndef _MODEL_H_
-#define _MODEL_H_
+#ifndef _KSTABMODEL_H_
+#define _KSTABMODEL_H_
 
 #include <iostream>
 #include <sstream>
@@ -15,7 +15,7 @@
 enum ModelStatus {AT_OPTIMUM, IS_INFEASIBLE, STATUS_UNKNOWN};
 
 /***
- * \file model.h
+ * \file kstab_model.h
  * 
  * Module for the integer programming model to find fixed cardinality stable
  * sets of minimum weight, using the Gurobi solver API.
@@ -28,11 +28,11 @@ enum ModelStatus {AT_OPTIMUM, IS_INFEASIBLE, STATUS_UNKNOWN};
  * \author Phillippe Samer <phillippes@gmail.com>
  * \date 02.11.2021
  */
-class Model
+class KStabModel
 {
 public:
-    Model(IO*);
-    ~Model();
+    KStabModel(IO*);
+    ~KStabModel();
     
     int solve(bool);
     long solution_weight;

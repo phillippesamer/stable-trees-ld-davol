@@ -1,6 +1,6 @@
 CC		    = g++ -Wall -O3 -m64 -lemon
 CC_DEBUG    = g++ -Wall -O0 -m64 -lemon -Wextra -g -DDEBUG
-FILES_CC	= graph.cpp io.cpp model.cpp ldda.cpp main.cpp
+FILES_CC	= graph.cpp io.cpp kstab_model.cpp ldda.cpp main.cpp
 BINARY		= ldda
 
 UNAME_S := $(shell uname -n)

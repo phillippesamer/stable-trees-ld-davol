@@ -1,7 +1,7 @@
 #ifndef _LDDA_H_
 #define _LDDA_H_
 
-#include "model.h"
+#include "kstab_model.h"
 #include <algorithm>
 #include <iomanip>
 #include <sstream>
@@ -18,8 +18,8 @@
 class LDDA
 {
 public:
-    LDDA(IO*, Model*);
-    LDDA(IO*, Model*, vector<long>);
+    LDDA(IO*, KStabModel*);
+    LDDA(IO*, KStabModel*, vector<long>);
     ~LDDA();
 
     bool dual_ascent(bool);
@@ -38,7 +38,7 @@ public:
 
 private:
     IO *instance;
-    Model *model;
+    KStabModel *model;
 
     pair<bool,long> edge_deletion_bound(long);
     pair<bool,long> edge_contraction_bound(long);

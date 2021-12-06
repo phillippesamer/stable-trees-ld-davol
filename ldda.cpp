@@ -1,6 +1,6 @@
 #include "ldda.h"
 
-LDDA::LDDA(IO *instance, Model *model)
+LDDA::LDDA(IO *instance, KStabModel *model)
 {
     this->instance = instance;
     this->model = model;
@@ -26,7 +26,7 @@ LDDA::LDDA(IO *instance, Model *model)
     }
 }
 
-LDDA::LDDA(IO *instance, Model *model, vector<long> initial_multipliers)
+LDDA::LDDA(IO *instance, KStabModel *model, vector<long> initial_multipliers)
 {
     this->instance = instance;
     this->model = model;
@@ -147,7 +147,7 @@ bool LDDA::dual_ascent(bool steepest_ascent)
 
         if (model->solve(false) <= 0 || model->solution_status != AT_OPTIMUM)
         {
-            cout << "Model::solve() failed" << endl;
+            cout << "KStabModel::solve() failed" << endl;
             cout << "infeasible problem instance" << endl;
             return false;
         }

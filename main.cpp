@@ -9,7 +9,7 @@
  */
 
 #include "io.h"
-#include "model.h"
+#include "kstab_model.h"
 #include "ldda.h"
 
 #include <cstdlib>
@@ -59,9 +59,18 @@ int main(int argc, char **argv)
         return 0;
     }
 
-    Model *model = new Model(instance);
+    KStabModel *model = new KStabModel(instance);
     LDDA *lagrangean = new LDDA(instance, model);
 
+    /*
+    if (model->solve_full_lp_relax(true))
+    {
+        cout << "lp_bound = " << model->full_lp_bound << "(runtime: " << model->full_lp_runtime << ")" << endl;
+        // TODO: check acyclic solution
+    }
+    */
+
+    //*
     start_timer();
     lagrangean->dual_ascent(false);
     get_timer();
@@ -82,6 +91,7 @@ int main(int argc, char **argv)
         cout << log.str();
         cout << "ERROR: unable to write log file; dumped to screen" << endl;
     }
+    //*/
 
     // clean up
     free(clock_start);
