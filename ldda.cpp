@@ -7,6 +7,7 @@ LDDA::LDDA(IO *instance, Model *model)
     this->fixed_vars = vector< pair<long,bool> >();
     this->bound_log = vector<long>();
     this->solution_pool = vector< pair<long, vector<bool> > >();
+    this->full_log = stringstream();
 
     this->contracted_edges_weight = 0;
     this->contracted_edges = vector<long>();
@@ -15,11 +16,14 @@ LDDA::LDDA(IO *instance, Model *model)
     // backup original weights to restore later
     original_weights = vector<long>(instance->graph->w);
 
-    // initialize multipliers at one
+    // initialize multipliers at half the original weights
     multipliers_log = vector< vector<long> >();
     multipliers_log.push_back( vector<long>(instance->graph->num_edges, 0) ); //////////// !!!!!!!!!!!!!!!!!  //////////// !!!!!!!!!!!!!!!!!  //////////// !!!!!!!!!!!!!!!!!
     for (long idx=0; idx < instance->graph->num_edges; ++idx)
-        multipliers_log[0][idx] = (long) pow(-1, idx)*(idx % 3);
+    {
+        //multipliers_log[0][idx] = (long) pow(-1, idx)*(idx % 2);
+        multipliers_log[0][idx] = round(original_weights[idx] / 2);
+    }
 }
 
 LDDA::LDDA(IO *instance, Model *model, vector<long> initial_multipliers)
@@ -29,6 +33,7 @@ LDDA::LDDA(IO *instance, Model *model, vector<long> initial_multipliers)
     this->fixed_vars = vector< pair<long,bool> >();
     this->bound_log = vector<long>();
     this->solution_pool = vector< pair<long, vector<bool> > >();
+    this->full_log = stringstream();
 
     this->contracted_edges_weight = 0;
     this->contracted_edges = vector<long>();
@@ -65,6 +70,14 @@ bool LDDA::dual_ascent(bool steepest_ascent)
      * if some step failed.
      */
 
+    // TO DO: REMOVE THIS
+    instance->graph->mst();
+    model->solve(true);
+    cout << "_____________________________________________________________________________" << endl << endl;
+    cout << "kstab bound " << model->solution_weight << " (runtime "
+         << model->solution_runtime << ")" << endl;
+    cout << "mst bound " << instance->graph->mst_weight << endl;
+
     // 0. INITIALIZE WEIGHTS WITH LAGRANGEAN MULTIPLIERS
 
     // args: source1 begin, source1 end, source2 begin, dest begin, operator
@@ -75,9 +88,19 @@ bool LDDA::dual_ascent(bool steepest_ascent)
                minus<long>() );
 
     #ifdef DEBUG
-        cout << endl << "DUAL ASCENT STARTED" << endl << endl;
-        cout << "initial mst objective vector: ";
-        print_edge_weights();
+        cout << endl << "Lagrangean Decomposition Dual Ascent" << endl << endl;
+        // log format
+        cout << setw(9) << "feasible?";
+        cout << setw(9) << "iter";
+        cout << setw(9) << "bound";
+        cout << setw(12) << "#attempts";
+        cout << setw(12) << "direction";
+        cout << setw(12) << "adjustment";
+        cout << setw(9) << "mst (s)";
+        cout << setw(13) << "kstab (s)";
+        cout << setw(13) << "iter (s)";
+        cout << setw(13) << "varsfixed";
+        cout << endl;
     #endif
 
     instance->graph->update_all_weights(instance->graph->w);
@@ -92,9 +115,13 @@ bool LDDA::dual_ascent(bool steepest_ascent)
         ++iter;
         iter_update = false;
 
-        #ifdef DEBUG
-            cout << endl << "ITERATION #" << iter << endl << endl;
-        #endif
+        // log structures
+        bool feasible_mst = false;
+        bool feasible_kstab = false;
+
+        struct timeval *clock_start = (struct timeval *) malloc(sizeof(struct timeval));
+        struct timeval *clock_stop  = (struct timeval *) malloc(sizeof(struct timeval));
+        gettimeofday(clock_start, 0);
 
         // 1. SOLVE MST(G, w-lambda^r)
 
@@ -182,6 +209,8 @@ bool LDDA::dual_ascent(bool steepest_ascent)
 
             this->solution_pool.push_back( make_pair(true_cost, instance->graph->mst_vector) );
 
+            feasible_mst = true;
+
             cout << "the mst solution is primal feasible" << endl;
             cout << "integer feasible point of weight " << true_cost << endl;
 
@@ -217,6 +246,8 @@ bool LDDA::dual_ascent(bool steepest_ascent)
 
             this->solution_pool.push_back( make_pair(true_cost, model->solution_vector) );
 
+            feasible_kstab = true;
+
             cout << "the kstab solution is primal feasible" << endl;
             cout << "integer feasible point of weight " << true_cost << endl;
 
@@ -244,10 +275,6 @@ bool LDDA::dual_ascent(bool steepest_ascent)
          * from the iteration number (and mod out by the cardinality of the
          * mismatch set).
          */
-
-        #ifdef DEBUG
-            cout << "SEARCH FOR ASCENT DIRECTION STARTING" << endl;
-        #endif
 
         long chosen_direction = -1;
         long chosen_adjustment = -1;
@@ -452,21 +479,14 @@ bool LDDA::dual_ascent(bool steepest_ascent)
             ++attempt;
         }
 
-        #ifdef DEBUG
-            cout << "SEARCH FOR DIRECTION COMPLETE (" << attempt << " ATTEMPTS)" << endl;
-            cout << "chosen_direction = " << chosen_direction
-                 << ", chosen_adjustment = " << chosen_adjustment
-                 << ", chosen_bound_improvement = " << chosen_bound_improvement
-                 << endl;
-        #endif
-
         // 6. UPDATE MULTIPLIER \lambda^{r+1}_e, COPY THE OTHERS
 
         if (chosen_direction > 0)
         {
             // data structures in this object
             vector<long> next_multipliers = vector<long>( multipliers_log.back() );
-            next_multipliers[chosen_direction] = next_multipliers[chosen_direction] + chosen_adjustment;
+            next_multipliers[chosen_direction] = next_multipliers[chosen_direction]
+                                                 + chosen_adjustment;
             multipliers_log.push_back(next_multipliers);
 
             long new_bound = bound_log.back() + chosen_bound_improvement;
@@ -479,30 +499,57 @@ bool LDDA::dual_ascent(bool steepest_ascent)
             // update objective in kstab subproblem: lambda_e
             model->update_single_weight(chosen_direction,
                 next_multipliers[chosen_direction]);
-
-
-            // 7. SCREEN LOG
-            cout << "iter\t bound\t";
-            //if (!multipliers_log.empty())
-                cout << "multipliers { ... }";
-            cout << endl;
-
-            cout <<  iter << "\t " << bound_log.back() << "\t";
-            //if (!multipliers_log.empty()) 
-            //{
-                cout << " { ";
-                for (long idx=0; idx < instance->graph->num_edges; ++idx)
-                    cout << (multipliers_log.back()).at(idx) << " ";
-                cout << " }";
-            //}
-            cout << endl;
         }
 
+        // 7. SCREEN LOG
+        stringstream logline;
+        logline.precision(4);
+
+        // iteration time
+        gettimeofday(clock_stop, 0);
+        unsigned long clock_time = 1.e6 * (clock_stop->tv_sec - clock_start->tv_sec) +
+                                          (clock_stop->tv_usec - clock_start->tv_usec);
+        double iter_time = ((double)clock_time / (double)1.e6);
+        free(clock_start);
+        free(clock_stop);
+
+        if (feasible_mst)
+            logline << " * ";
+        else
+            logline << " - ";
+
+        if (feasible_kstab)
+            logline << " * ";
+        else
+            logline << " - ";
+
+        logline << " " << setw(9) << iter;
+        logline << " " << setw(9) << bound_log.back();
+        logline << " " << setw(9) << attempt << "/" << mismatch.size();
+        if (chosen_direction > 0)
+        {
+            logline << " " << setw(9) << chosen_direction;
+            logline << " " << setw(9) << chosen_adjustment;
+        }
+        else
+        {
+            logline << " " << setw(9) << "-";
+            logline << " " << setw(9) << "-";
+        }
+        logline << " " << fixed << setw(12) << instance->graph->mst_runtime;
+        logline << " " << fixed << setw(12) << model->solution_runtime;
+        logline << " " << fixed << setw(12) << iter_time;
+        logline << " " << setw(9) << fixed_vars.size();
+
+        //logline << right << setw(0);
+        //logline.unsetf(ios_base::floatfield);
+
+        cout << logline.str() << endl;
+        full_log << logline.str() << endl;
     }
     while (iter_update);
 
     // no direction admits a positive step size - the procedure is over
-    cout << endl << "DUAL ASCENT DONE AFTER " << iter << " ITERATIONS" << endl << endl;
 
     return true;
 }
@@ -639,15 +686,41 @@ IO* LDDA::flush_fixes_to_instance()
     return 0;
 }
 
-void LDDA::print_edge_weights()
+stringstream LDDA::create_log()
 {
-    // print current weights (in MST subproblem)
-    cout << endl << "multipliers: ";
-    for (long idx=0; idx < instance->graph->num_edges; ++idx)
-        cout << this->multipliers_log.back()[idx] << " ";
+    /// prepare log of the LDDA execution as a stringstream object
+    stringstream log;
+    log << setw(9) << "feasible?";
+    log << setw(9) << "iter";
+    log << setw(9) << "bound";
+    log << setw(12) << "#attempts";
+    log << setw(12) << "direction";
+    log << setw(12) << "adjustment";
+    log << setw(9) << "mst (s)";
+    log << setw(13) << "kstab (s)";
+    log << setw(13) << "iter (s)";
+    log << setw(13) << "varsfixed";
+    log << endl;
+    log << full_log.str() << endl;
 
-    cout << endl << "lemonlist weights: ";
-    for (long idx=0; idx < instance->graph->num_edges; ++idx)
-        cout << (*instance->graph->lemon_weight)[ instance->graph->lemon_edges[idx] ] << " ";
-    cout << endl << endl;
+    log << "LDDA multipliers log:" << endl;
+    for (unsigned i=0; i < multipliers_log.size(); ++i)
+    {
+        log << "#"<< setw(3) << left;
+        log << i;
+        log << setw(0) << right;
+        log << ": ";
+        for (unsigned idx=0; idx < multipliers_log[i].size(); ++idx)
+        {
+            //if (idx+1 % 30 == 0) log << endl;
+            log << multipliers_log[i][idx] << " ";
+        }
+        log << endl;
+    }
+
+    log << endl << "LDDA fixed vars:" << endl;
+    for (unsigned i=0; i < fixed_vars.size(); ++i)
+        log << "x[" << fixed_vars[i].first << "] = " << fixed_vars[i].second << endl;
+
+    return log;
 }

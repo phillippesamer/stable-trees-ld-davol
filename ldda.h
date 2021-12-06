@@ -3,6 +3,9 @@
 
 #include "model.h"
 #include <algorithm>
+#include <iomanip>
+#include <sstream>
+#include <sys/time.h>
 
 /***
  * \file ldda.h
@@ -31,6 +34,8 @@ public:
     vector< pair<long,bool> > fixed_vars;   // vars fixed during execution
     IO* flush_fixes_to_instance();
 
+    stringstream create_log();
+
 private:
     IO *instance;
     Model *model;
@@ -41,13 +46,13 @@ private:
     pair<ModelStatus,long> vertex_fix_bound(long);
     void fix_element_at_one_in_graph_and_model(long);
 
-    void print_edge_weights();
-
     vector<long> original_weights;
 
     long contracted_edges_weight;
     vector<long> contracted_edges;
     vector<bool> contracted_edges_mask;
+
+    stringstream full_log;
 };
 
 #endif

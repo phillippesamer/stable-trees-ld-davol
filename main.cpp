@@ -13,6 +13,7 @@
 #include "ldda.h"
 
 #include <cstdlib>
+#include <fstream>
 #include <sys/time.h>       // for 'gettimeofday()'
 
 using namespace std;
@@ -64,6 +65,23 @@ int main(int argc, char **argv)
     start_timer();
     lagrangean->dual_ascent(false);
     get_timer();
+
+    // write log to file
+    stringstream log = lagrangean->create_log();
+
+    char buffer[200];
+    int cx = snprintf(buffer, 200, "%s_ldda.log", argv[1]);
+    ofstream logfile(buffer);
+    if (cx>=0 && cx<200 && logfile.is_open())
+    {
+        logfile << log.str();
+        logfile.close();
+    }
+    else
+    {
+        cout << log.str();
+        cout << "ERROR: unable to write log file; dumped to screen" << endl;
+    }
 
     // clean up
     free(clock_start);

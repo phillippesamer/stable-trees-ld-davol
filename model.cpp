@@ -124,10 +124,6 @@ int Model::solve(bool logging)
                 cout << "Unexpected error: optimal value is " << optval << " (not integral!)" << endl << endl;
             }
 
-            #ifdef DEBUG
-                cout << "Model optimal weight: " << this->solution_weight;
-            #endif
-
             // save bool vector of this solution
 
             /*
@@ -152,9 +148,6 @@ int Model::solve(bool logging)
                 #endif
                 */
             }
-            #ifdef DEBUG
-                cout << " (runtime: " << solution_runtime << ")" << endl;
-            #endif
 
             // returning number of solutions (likely sub-optimal), in case it's useful later
             return model->get(GRB_IntAttr_SolCount);
