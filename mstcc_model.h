@@ -7,6 +7,14 @@
 
 #include "gurobi_c++.h"
 
+// using the preflow-push algorithm in LEMON (COIN-OR project, see: www.lemon.cs.elte.hu/)
+#include <lemon/concepts/digraph.h>
+#include <lemon/smart_graph.h>
+#include <lemon/preflow.h>
+
+using namespace lemon;
+using namespace lemon::concepts;
+
 #include "io.h"
 #include "kstab_model.h"
 
@@ -22,6 +30,16 @@
  * \author Phillippe Samer <phillippes@gmail.com>
  * \date 04.12.2021
  */
+
+typedef struct
+{
+    map<string,int> pool;               // stores cuts not to add repeated ones
+
+    vector<int> sec_diff_cuts;          // # of different cuts in each separation
+    vector<double> sec_infeas_std_dev;  // std.dev. of the amount violated    
+} statistics;
+
+
 class StableSpanningTreeModel: public KStabModel
 {
 public:
@@ -31,9 +49,16 @@ public:
     bool solve_lp_relax(bool); // full model (with SEC in the ORIGINAL GRAPH)
     double lp_bound;
     double lp_runtime;
+    long lp_passes;
 
 private:
-    bool separate_SEC();
+    friend class violated_sec;   // encapsulates a class of violated cuts
+
+    statistics *stats;
+
+    bool separate_SEC(vector<GRBLinExpr> &, vector<long> &);
+    bool separate_SEC_integer(vector<GRBLinExpr> &, vector<long> &);
+    void dfs_to_count(long, bool *, bool **, vector<long> &, vector< vector<long> > &, long*, long*);
 };
 
 #endif

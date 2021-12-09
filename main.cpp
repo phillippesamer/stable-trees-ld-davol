@@ -66,7 +66,8 @@ int main(int argc, char **argv)
     {
         cout << "_____________________________________________________________________________" << endl << endl;
         cout << "lp_bound = " << lpr_model->lp_bound
-             << " (runtime: " << lpr_model->lp_runtime << ")" << endl;
+             << " (" << lpr_model->lp_passes << " passes,"
+             << " runtime: " << lpr_model->lp_runtime << ")" << endl;
         cout << "_____________________________________________________________________________" << endl << endl;
 
         // TODO: check acyclic solution
