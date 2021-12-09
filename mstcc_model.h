@@ -3,6 +3,7 @@
 
 #include <iostream>
 #include <sstream>
+#include <stack>
 #include <sys/time.h>
 
 #include "gurobi_c++.h"
@@ -58,7 +59,8 @@ private:
 
     bool separate_SEC(vector<GRBLinExpr> &, vector<long> &);
     bool separate_SEC_integer(vector<GRBLinExpr> &, vector<long> &);
-    void dfs_to_count(long, bool *, bool **, vector<long> &, vector< vector<long> > &, long*, long*);
+    void dfs_checking_acyclic(long, long, vector<bool> &, long &, stack<long> &, vector< list<long> > &, bool &);
+    void dfs_to_count(long, bool *, bool **, vector<long> &, vector< list<long> > &, long*, long*);
 };
 
 #endif

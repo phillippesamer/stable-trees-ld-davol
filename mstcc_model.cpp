@@ -190,35 +190,41 @@ bool StableSpanningTreeModel::solve_lp_relax(bool logging)
 }
 
 
-void StableSpanningTreeModel::dfs_to_count( long u, 
-                                            bool *chk_v, 
-                                            bool **chk_e, 
-                                            vector<long> &seen_edges, 
-                                            vector< vector<long> > &adj_list, 
-                                            long *v_count, 
-                                            long *e_count )
+void StableSpanningTreeModel::dfs_checking_acyclic( long u,
+                                                    long parent,
+                                                    vector<bool> &check,
+                                                    long &checked_count,
+                                                    stack<long> &cycle_edges,
+                                                    vector< list<long> > &adj_list,
+                                                    bool &acyclic)
 {
-    /// specialized depth-first search to count vertices and edges in subgraph
+    /// specialized depth-first search to check if a subgraph is acyclic
 
-    chk_v[u] = 1;
-    ++(*v_count);
-    
-    for (unsigned i=0; i<adj_list[u].size(); ++i)
+    check[u] = true;
+    ++checked_count;
+
+    list<long>::iterator it = adj_list[u].begin();
+    while (it != adj_list[u].end() && acyclic)
     {
-        int v = adj_list[u].at(i);
+        long v = (*it);
         
-        if (chk_e[u][v] == 0 && chk_e[v][u] == 0)
-        {
-            // every edge we see is counted (e.g. whether back edge or not)
-            ++(*e_count);
+        long edge_idx = this->instance->graph->index_matrix[u][v];
 
-            // sets only (u,v) to find violated constraint more easily
-            chk_e[u][v] = 1;
-            seen_edges.push_back( this->instance->graph->index_matrix[u][v] );
+        if (!check[v])
+        {
+            cycle_edges.push(edge_idx);
+            dfs_checking_acyclic(v, u, check, checked_count, cycle_edges, adj_list, acyclic);
+            if (acyclic)
+                cycle_edges.pop();
         }
-        
-        if (chk_v[v] == 0)
-            dfs_to_count(v, chk_v, chk_e, seen_edges, adj_list, v_count, e_count);
+        else if (v != parent)
+        {
+            // vertex (not the antecessor) already visited: back edge!
+            acyclic = false;
+            cycle_edges.push(edge_idx);
+        }
+
+        ++it;
     }
 }
 
@@ -248,9 +254,9 @@ bool StableSpanningTreeModel::separate_SEC_integer( vector<GRBLinExpr> &cuts_lhs
     if (s_.size() == (unsigned) instance->graph->num_edges)
     {
         // makes adjlist of the subgraph induced by the current solution
-        vector< vector<long> > s_adj_list;
+        vector< list<long> > s_adj_list;
         for (long i=0; i<instance->graph->num_vertices; ++i)
-            s_adj_list.push_back(vector<long>());
+            s_adj_list.push_back(list<long>());
         
         for (vector<long>::iterator it = s_.begin(); it != s_.end(); ++it)
         {
@@ -263,77 +269,71 @@ bool StableSpanningTreeModel::separate_SEC_integer( vector<GRBLinExpr> &cuts_lhs
                 s_adj_list[v].push_back(u);
             }
         }
-        
-        // check if solution contains a cycle
-        bool *chk_v = new bool[instance->graph->num_vertices];
-        memset(chk_v, 0, sizeof(bool)*instance->graph->num_vertices);
-        
-        for (long root=0; root<instance->graph->num_vertices; ++root)
+
+        bool acyclic = true;
+
+        stack<long> cycle_edges;
+        vector<bool> check = vector<bool>(instance->graph->num_vertices, false);
+        long checked_count = 0;
+
+        // the search starts only once, if the subgraph is connected/acyclic
+        long root = 0;
+        while (root < instance->graph->num_vertices && acyclic && checked_count < instance->graph->num_vertices)
         {
-            if (!chk_v[root])
+            #ifdef DEBUG_DFS
+                cout << "root = " << root << endl;
+            #endif
+
+            if (!check[root])
             {
-                // checks vertices and edges as visited
-                long count_v = 0;
-                long count_e = 0;
-                vector<long> list_e; vector<long>();
-                bool **chk_e = new bool*[instance->graph->num_vertices];
-                for (long i=0; i<instance->graph->num_vertices; ++i)
-                {
-                    chk_e[i] = new bool[instance->graph->num_vertices];
-                    memset(chk_e[i], 0, sizeof(bool)*instance->graph->num_vertices);
-                }
-                
-                dfs_to_count(root, chk_v, chk_e, list_e, s_adj_list, &count_v, &count_e);
-                
-                // a component includes a cycle if #edges >= vertices
-                if (count_e >= count_v)
-                {
-                    // set S with checked vertices yields violated constraint
-                    GRBLinExpr violated_constraint = 0;
-                    
-                    #ifdef DEBUG
-                    cout << "succeeded on ";
-                    #endif
-
-                    // lhs
-                    for (vector<long>::iterator it = list_e.begin(); it != list_e.end(); ++it)
-                    {
-                        violated_constraint += x[*it];
-
-                        #ifdef DEBUG
-                        cout << "+ x[" << *it << "]";
-                        #endif
-                    }
-
-                    // save this SEC in the reference arg (added selectively to model by the caller function)
-                    cuts_lhs.push_back(violated_constraint);
-                    cuts_rhs.push_back(count_v-1);
-
-                    #ifdef DEBUG
-                    cout << " <= " << count_v-1 << endl;
-                    #endif
-
-                    // clean up
-                    for (long i = 0; i<instance->graph->num_vertices; ++i)
-                        delete[] chk_e[i];
-                    delete[] chk_e;
-                    delete[] chk_v;
-
-                    return true;
-                }
-                
-                for (long i = 0; i<instance->graph->num_vertices; ++i)
-                    delete[] chk_e[i];
-                delete[] chk_e;
+                #ifdef DEBUG_DFS
+                    cout << "dfs starting!" << endl << endl;
+                #endif
+                dfs_checking_acyclic(root, -1, check, checked_count, cycle_edges, s_adj_list, acyclic);
             }
+
+            ++root;
         }
-        
-        delete[] chk_v;
+
+        if (!acyclic)
+        {
+            // set S with checked vertices yields violated constraint
+            GRBLinExpr violated_constraint = 0;
+            
+            #ifdef DEBUG
+            cout << "succeeded on ";
+            #endif
+
+            long cycle_size = cycle_edges.size();
+
+            // lhs
+            while (!cycle_edges.empty())
+            {
+                violated_constraint += x[cycle_edges.top()];
+
+                #ifdef DEBUG
+                cout << "+ x[" << cycle_edges.top() << "]";
+                #endif
+
+                cycle_edges.pop();
+            }
+
+            // save this SEC in the reference arg (added selectively to model by the caller function)
+            cuts_lhs.push_back(violated_constraint);
+            cuts_rhs.push_back(cycle_size - 1);
+
+            #ifdef DEBUG
+            cout << " <= " << cycle_size-1 << endl;
+            #endif
+
+            return true;
+        }
     }
 
     #ifdef DEBUG
     cout << "failed" << endl;
     #endif
+
     return false;
 }
 
