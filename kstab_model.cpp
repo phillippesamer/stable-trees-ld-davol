@@ -91,15 +91,15 @@ int KStabModel::solve(bool logging)
     try
     {
         // turn off all gurobi cut generators
-        //model->getEnv().set(GRB_IntParam_Cuts, 0);
+        //env->set(GRB_IntParam_Cuts, 0);
 
         // turn off gurobi presolve and heuristics
-        //model->getEnv().set(GRB_IntParam_Presolve, 0);
-        //model->getEnv().set(GRB_IntParam_PrePasses, 0);
-        //model->getEnv().set(GRB_DoubleParam_Heuristics, 0);
+        //env->set(GRB_IntParam_Presolve, 0);
+        //env->set(GRB_IntParam_PrePasses, 0);
+        //env->set(GRB_DoubleParam_Heuristics, 0);
 
         // need to disable presolve reductions that affect user cuts
-        //model->getEnv().set(GRB_IntParam_PreCrush, 1);
+        //env->set(GRB_IntParam_PreCrush, 1);
 
         if (logging == true)
             model->set(GRB_IntParam_OutputFlag, 1);

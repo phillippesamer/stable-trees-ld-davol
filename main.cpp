@@ -62,7 +62,7 @@ int main(int argc, char **argv)
 
     // LP relaxation bound
     StableSpanningTreeModel *lpr_model = new StableSpanningTreeModel(instance);
-    if (lpr_model->solve_lp_relax(true))
+    if (lpr_model->solve_lp_relax(false))
     {
         cout << "_____________________________________________________________________________" << endl << endl;
         cout << "lp_bound = " << lpr_model->lp_bound

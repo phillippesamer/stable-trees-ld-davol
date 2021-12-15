@@ -6,6 +6,9 @@
 #include <stack>
 #include <sys/time.h>
 
+#include <set>
+#include <iomanip>
+
 #include "gurobi_c++.h"
 
 // using the preflow-push algorithm in LEMON (COIN-OR project, see: www.lemon.cs.elte.hu/)
@@ -18,6 +21,8 @@ using namespace lemon::concepts;
 
 #include "io.h"
 #include "kstab_model.h"
+
+#define VIOLATION_TOL 0.1
 
 /***
  * \file mstcc_model.h
@@ -59,6 +64,7 @@ private:
 
     bool separate_SEC(vector<GRBLinExpr> &, vector<long> &);
     bool separate_SEC_integer(vector<GRBLinExpr> &, vector<long> &);
+    bool separate_SEC_fallback(vector<GRBLinExpr> &, vector<long> &);
     void dfs_checking_acyclic(long, long, vector<bool> &, long &, stack<long> &, vector< list<long> > &, bool &);
     void dfs_to_count(long, bool *, bool **, vector<long> &, vector< list<long> > &, long*, long*);
 };
