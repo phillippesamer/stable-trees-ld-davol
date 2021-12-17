@@ -64,16 +64,18 @@ int main(int argc, char **argv)
     StableSpanningTreeModel *lpr_model = new StableSpanningTreeModel(instance);
     if (lpr_model->solve_lp_relax(false))
     {
+        /*
         cout << "_____________________________________________________________________________" << endl << endl;
         cout << "lp_bound = " << lpr_model->lp_bound
              << " (" << lpr_model->lp_passes << " passes,"
              << " runtime: " << lpr_model->lp_runtime << ")" << endl;
         cout << "_____________________________________________________________________________" << endl << endl;
-
+        */
         // TODO: check acyclic solution
     }
     delete lpr_model;
 
+    /*
     // Lagrangean Decomposition bound
     KStabModel *model = new KStabModel(instance);
     LDDA *lagrangean = new LDDA(instance, model);
@@ -103,6 +105,7 @@ int main(int argc, char **argv)
     free(clock_start);
     delete lagrangean;
     delete model;
+    */
     delete instance;
 
     return 0;

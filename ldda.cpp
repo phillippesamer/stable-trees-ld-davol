@@ -72,12 +72,11 @@ bool LDDA::dual_ascent(bool steepest_ascent)
 
     // TO DO: REMOVE THIS
     instance->graph->mst();
-    //model->solve(true);
+    model->solve(true);
     cout << "_____________________________________________________________________________" << endl << endl;
-    //cout << "kstab bound " << model->solution_weight << " (runtime "
-    //     << model->solution_runtime << ")" << endl;
+    cout << "kstab bound " << model->solution_weight << " (runtime "
+         << model->solution_runtime << ")" << endl;
     cout << "mst bound " << instance->graph->mst_weight << endl;
-    return true;
 
     // 0. INITIALIZE WEIGHTS WITH LAGRANGEAN MULTIPLIERS
 

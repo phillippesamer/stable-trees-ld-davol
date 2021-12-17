@@ -61,6 +61,25 @@ StableSpanningTreeModel::StableSpanningTreeModel(IO *instance)
 {
     this->lp_bound = this->lp_runtime = -1;
     stats = new statistics();
+
+    // add redundant constraints (all vertices should have degree >= 1)
+    // to make LP relaxation faster
+    ostringstream cname;
+    for (long u=0; u < instance->graph->num_vertices; u++)
+    {
+        GRBLinExpr cut_edges = 0;
+        for (list<long>::iterator it = instance->graph->adj_list[u].begin();
+            it != instance->graph->adj_list[u].end(); ++it)
+        {
+            long edge_idx = instance->graph->index_matrix[u][*it];
+            cut_edges += x[edge_idx];
+        }
+
+        cname.str("");
+        cname << "MSTCC_degree_" << u;
+        model->addConstr(cut_edges >= 1, cname.str());
+    }
+    model->update();
 }
 
 
@@ -83,6 +102,15 @@ bool StableSpanningTreeModel::solve_lp_relax(bool logging)
     {
         // turn off all gurobi cut generators
         model->set(GRB_IntParam_Cuts, 0);
+        /*
+        model->set(GRB_IntParam_Presolve, 0);
+        model->set(GRB_DoubleParam_PreSOS1BigM, 0);
+        model->set(GRB_DoubleParam_PreSOS2BigM, 0);
+        model->set(GRB_IntParam_PreSparsify, 0);
+        model->set(GRB_IntParam_PreCrush, 1);
+        model->set(GRB_IntParam_DualReductions, 0);
+        model->set(GRB_IntParam_Aggregate, 0);
+        */
 
         if (logging == true)
             model->set(GRB_IntParam_OutputFlag, 1);
@@ -111,13 +139,28 @@ bool StableSpanningTreeModel::solve_lp_relax(bool logging)
             cout << "LP relaxation pass #" << lp_passes << " (bound = "
                  << model->get(GRB_DoubleAttr_ObjVal) << ")" << endl;
             
-            //for (long i=0; i < this->instance->graph->num_edges; ++i)
-            //    cout << "x[" << i << "] = " << this->x[i].get(GRB_DoubleAttr_X) << endl;
+            /*
+            for (long i=0; i < this->instance->graph->num_edges; ++i)
+                cout << "x[" << i << "] = " << this->x[i].get(GRB_DoubleAttr_X) << endl;
+            */
+
+            
+            cout << "fractional vars in the final solution of the lpr" << endl;
+            for (long i=0; i < this->instance->graph->num_edges; ++i)
+            {
+                double tmp = this->x[i].get(GRB_DoubleAttr_X);
+                if (tmp > EPSILON_TOL && tmp < 1 - EPSILON_TOL)
+                {
+                    cout.precision(10);
+                    cout << "\tx[ (" << instance->graph->s[i] << "," << instance->graph->t[i] << ") ] = " << this->x[i].get(GRB_DoubleAttr_X) << endl;
+                }
+            }
+            
             #endif
 
             // eventual cuts are stored here
-            vector<GRBLinExpr> cuts_lhs;
-            vector<long> cuts_rhs;
+            vector<GRBLinExpr> cuts_lhs = vector<GRBLinExpr>();
+            vector<long> cuts_rhs = vector<long>();
 
             if (USE_FAST_INTEGER_CUT)
             {
@@ -125,23 +168,20 @@ bool StableSpanningTreeModel::solve_lp_relax(bool logging)
                 model_updated = separate_SEC_integer(cuts_lhs,cuts_rhs);
             }
 
-            // if not using the integer separation or if solution is fractional
             if (!model_updated)
             {
-                // standard separation procedure
+                // if not using the integer separation or if solution is
+                // fractional, try standard separation procedure
                 model_updated = separate_SEC(cuts_lhs,cuts_rhs);
             }
 
-            // if the most efficient separation procedures failed, we make a
-            // last attempt using a mincut formulation
-            /*
-            if (!model_updated)
+/*            if (!model_updated)
             {
-                // standard separation procedure
+                // if the most efficient separation procedures failed, we make a
+                // last attempt checking the subgraph induced by fractional vars
                 model_updated = separate_SEC_fallback(cuts_lhs,cuts_rhs);
             }
-            */
-
+*/
             if (model_updated)
             {
                 // add cut(s)
@@ -155,19 +195,7 @@ bool StableSpanningTreeModel::solve_lp_relax(bool logging)
                 model->update();
                 model->optimize();
                 this->lp_passes++;
-            }
-            else
-            {
-                cout << "fractional vars in the final solution of the lpr" << endl;
-                for (long i=0; i < this->instance->graph->num_edges; ++i)
-                {
-                    double tmp = this->x[i].get(GRB_DoubleAttr_X);
-                    if (tmp > EPSILON_TOL && tmp < 1 - EPSILON_TOL)
-                    {
-                        cout.precision(10);
-                        cout << "\tx[" << i << "] = " << this->x[i].get(GRB_DoubleAttr_X) << endl;
-                    }
-                }
+                cout << "model status = " << model->get(GRB_IntAttr_Status) << endl;
             }
         }
 
@@ -178,6 +206,13 @@ bool StableSpanningTreeModel::solve_lp_relax(bool logging)
         this->lp_runtime = ((double)clock_time / (double)1.e6);
         free(clock_start);
         free(clock_stop);
+
+// TODO: REMOVE THIS
+instance->graph->mst();
+cout << instance->graph->mst_weight << endl;
+cout << model->get(GRB_DoubleAttr_ObjVal) << endl;
+cout << instance->graph->mst_weight - model->get(GRB_DoubleAttr_ObjVal) << endl;
+//model->write("mstcc_with_sec.lp");
 
         // loop might have broken because no violated SEC exists or because the problem became infeasible
         if (model->get(GRB_IntAttr_Status) == GRB_OPTIMAL)
@@ -373,18 +408,26 @@ bool StableSpanningTreeModel::separate_SEC( vector<GRBLinExpr> &cuts_lhs,
     vector<double> x_val;
     for (long i=0; i < instance->graph->num_edges; ++i)
     {
-        double tmp = this->x[i].get(GRB_DoubleAttr_X);
+        double tmp1 = this->x[i].get(GRB_DoubleAttr_X);
+
+        double tmp2 = tmp1 * 1e10;
+        tmp2 = std::round(tmp2);
+        tmp2 = tmp2 * 1e-10;
+
+        x_val.push_back(tmp2);
+
+        /*
         if (tmp < EPSILON_TOL)
             x_val.push_back(0.0);
         else if (tmp > 1.0 - EPSILON_TOL)
             x_val.push_back(1.0);
         else
             x_val.push_back(tmp);
+        */
     }
 
     // LEMON digraph representing the current solution
     long num_vertices = instance->graph->num_vertices;
-    long num_edges = 2*(instance->graph->num_edges);
     
     SmartDigraph lemon_g;
     SmartDigraph::ArcMap<double> lemon_cap(lemon_g);
@@ -394,33 +437,34 @@ bool StableSpanningTreeModel::separate_SEC( vector<GRBLinExpr> &cuts_lhs,
         lemon_vertices.push_back(lemon_g.addNode());
     
     // for each edge in the original graph, create arcs on both directions
-    for (long e=0; e<num_edges; e+=2)
+    for (long i=0; i<instance->graph->num_edges; ++i)
     {
-        long aux = e / 2;
-        long v1 = instance->graph->s[aux];
-        long v2 = instance->graph->t[aux];
-        double cap = x_val[aux];
+        long v1 = instance->graph->s[i];
+        long v2 = instance->graph->t[i];
         
         // LEMON arcs
-        SmartDigraph::Arc lemon_arc;
-        lemon_arc = lemon_g.addArc(lemon_vertices[v1], lemon_vertices[v2]);
-        lemon_cap[lemon_arc] = cap;
+        SmartDigraph::Arc lemon_arc_1;
+        lemon_arc_1 = lemon_g.addArc(lemon_vertices[v1], lemon_vertices[v2]);
+        lemon_cap[lemon_arc_1] = x_val[i];
         
-        lemon_arc = lemon_g.addArc(lemon_vertices[v2], lemon_vertices[v1]);
-        lemon_cap[lemon_arc] = cap;
+        SmartDigraph::Arc lemon_arc_2;
+        lemon_arc_2 = lemon_g.addArc(lemon_vertices[v2], lemon_vertices[v1]);
+        lemon_cap[lemon_arc_2] = x_val[i];
     }
     
     // |V|-1 max flow (min cut) computations: from source vertex 0 to k \in V\{source}
     long source = 0;
     
     long separated = 0;
-    double most_violated = 0;
+    double most_violated = -1;
     long most_violated_idx = -1;
     vector<violated_sec*> cuts;
     
     // store how many different cuts were generated in this execution
     map<string,long> counting_cuts;
     
+    vector<double> mincut_vals;
+
     for (long sink=0; sink<num_vertices; ++sink)
     {
         if (sink != source)
@@ -439,6 +483,8 @@ bool StableSpanningTreeModel::separate_SEC( vector<GRBLinExpr> &cuts_lhs,
             
             double mincut = lemon_preflow.flowValue();
             
+            mincut_vals.push_back(mincut);
+
             // 2. THERE EXISTS A VIOLATED SEC IFF A MAX FLOW (MIN CUT) < 1
             if (mincut < 1)
             {
@@ -803,6 +849,10 @@ bool StableSpanningTreeModel::separate_SEC( vector<GRBLinExpr> &cuts_lhs,
         delete (*it);
     cuts.clear();
 
+    for (vector<double>::iterator it = mincut_vals.begin(); it < mincut_vals.end(); ++it)
+        cout << *it << " ";
+    cout << endl;
+
     return (sec_count > 0);
 }
 
@@ -811,245 +861,107 @@ bool StableSpanningTreeModel::separate_SEC_fallback( vector<GRBLinExpr> &cuts_lh
                                                      vector<long> &cuts_rhs )
 {
     /***
-     * solve the separation problem for subtour elimination constraints with an
-     * auxiliary min cut IP formulation
+     * try to separate solution with the cutset of vertices induced by
+     * edges with fractional values
      */
 
     vector<double> x_val;
     for (long i=0; i < instance->graph->num_edges; ++i)
-        x_val.push_back( this->x[i].get(GRB_DoubleAttr_X) );
-
-    // network corresponding to current subgraph
-    long num_vertices = instance->graph->num_vertices;
-    long num_edges = 2*(instance->graph->num_edges);
-    
-    vector<long> s;        // terminal node 1
-    vector<long> t;        // terminal node 2
-    vector<double> c;     // arc capacity
-    
-    int **index_matrix;   // adjacency matrix storing arc indexes
-    index_matrix = new int*[num_vertices];
-    for (int i=0; i<num_vertices; ++i)
     {
-        index_matrix[i] = new int[num_vertices];
-        for (int j=0; j<num_vertices; ++j)
-            index_matrix[i][j] = -1;
-    }
-    
-    // creates arcs on both directions of each edge in the original graph
-    for (int e=0; e<num_edges; e+=2)
-    {
-        int aux = e / 2;
-        int v1 = instance->graph->s[aux];
-        int v2 = instance->graph->t[aux];
-        double cap = x_val[aux] < EPSILON_TOL ? 0 : x_val[aux];
-        
-        // arc v1 -> v2
-        s.push_back(v1);
-        t.push_back(v2);
-        c.push_back(cap);
-        index_matrix[v1][v2] = e;
-        
-        // arc v2 -> v1
-        s.push_back(v2);
-        t.push_back(v1);
-        c.push_back(cap);
-        index_matrix[v2][v1] = e+1;
+        double tmp = this->x[i].get(GRB_DoubleAttr_X);
+        if (tmp < EPSILON_TOL)
+            x_val.push_back(0.0);
+        else if (tmp > 1.0 - EPSILON_TOL)
+            x_val.push_back(1.0);
+        else
+            x_val.push_back(tmp);
     }
 
-    // |V|-1 max flow (min cut) computations: from source vertex 0 to k \in V\{source}
-    long source = 0;
-    
-    bool separated = false;
-    
-    GRBEnv *sub_env = new GRBEnv();
-    
-    for (long sink=0; sink<num_vertices; ++sink)
+    set<long> frac_vars;
+    cout << "fractional vars in the final solution of the lpr" << endl;
+    for (long i=0; i < this->instance->graph->num_edges; ++i)
     {
-        if (sink != source && !separated)
+        double tmp = this->x[i].get(GRB_DoubleAttr_X);
+        if (tmp > EPSILON_TOL && tmp < 1 - EPSILON_TOL)
         {
-            /// 1. BUILD AND SOLVE MIN CUT MODEL
+            frac_vars.insert(instance->graph->s[i]);
+            frac_vars.insert(instance->graph->t[i]);
 
-            GRBModel *sub_model = new GRBModel(*sub_env);
-            
-            // var x: edges on cut
-            GRBVar *x_fvar = new GRBVar[num_edges];;
-            for (long i=0; i < num_edges; i++)
-                x_fvar[i] = sub_model->addVar(0.0, GRB_INFINITY, 0.0, GRB_CONTINUOUS);
-            sub_model->update();
+            cout.precision(10);
+            cout << "\tx[ (" << instance->graph->s[i] << "," << instance->graph->t[i] << ") ] = " << this->x[i].get(GRB_DoubleAttr_X) << endl;
+        }
+    }
 
-            // var y: vertices on cutset
-            GRBVar *y_fvar = new GRBVar[num_vertices];;
-            for (long i=0; i < num_vertices; i++)
-                y_fvar[i] = sub_model->addVar(-GRB_INFINITY, GRB_INFINITY, 0.0, GRB_CONTINUOUS);
-            sub_model->update();
+    cout << "the subgraph they induce:" << endl;
+    for (set<long>::iterator it = frac_vars.begin(); it != frac_vars.end(); ++it)
+    {
+        cout << "\tN(" << *it << ") = { ";
+        list<long>::iterator neighbour = instance->graph->adj_list[*it].begin();
+        while (neighbour != instance->graph->adj_list[*it].end())
+        {
+            cout << *neighbour << " ";
+            long edge_idx = instance->graph->index_matrix[*it][*neighbour];
+            if (edge_idx>0)
+                cout << "(" <<  setw(3) << this->x[edge_idx].get(GRB_DoubleAttr_X) << "   ) \t";
+            else
+                cout << "(   -   ) \t";
+            ++neighbour;
+        }
+        cout << "}" << endl;
+    }
 
-            // edge constraints
-            for (long e=0; e<num_edges; ++e)
+    long cutset_size = frac_vars.size();
+
+    vector<bool> cutset_chk_v = vector<bool>(instance->graph->num_vertices, false);
+    for (set<long>::iterator it = frac_vars.begin(); it != frac_vars.end(); ++it)
+        cutset_chk_v[*it] = true;
+    
+    double cutset_var_sum = 0;
+    
+    vector<long> cutset_induced_edges;
+
+    GRBLinExpr violated_constraint = 0;
+
+    // lhs: variables (x) corresponding to edges within checked vertices
+    for (long i=0; i<instance->graph->num_vertices; ++i)
+    {
+        for (long j=i+1; j<instance->graph->num_vertices; ++j)
+        {
+            long edge_idx = this->instance->graph->index_matrix[i][j];
+            if(edge_idx >= 0 && cutset_chk_v[i] && cutset_chk_v[j])
             {
-                GRBLinExpr constraint1 = 0;
-                
-                constraint1 += x_fvar[e];
-                constraint1 -= y_fvar[s[e]];
-                constraint1 += y_fvar[t[e]];
-                
-                sub_model->addConstr(constraint1 >= 0);
+                violated_constraint += x[edge_idx];
+
+                cutset_induced_edges.push_back(edge_idx);
+
+                // current value of vars, to compute violation
+                cutset_var_sum += x_val[edge_idx];
             }
-            
-            // s-t constraint
-            GRBLinExpr constraint2 = 0;
-            
-            constraint2 += y_fvar[source];
-            constraint2 -= y_fvar[sink];
-            
-            sub_model->addConstr(constraint2 >= 1);
-            
-            // extra constraint to bound solution (impose partitioning with y in {0,1})
-            GRBLinExpr constraint3 = 0;
-            
-            constraint3 += y_fvar[sink];
-            
-            sub_model->addConstr(constraint3 == 0);
-            
-            sub_model->update();
-
-            // objective function
-            GRBLinExpr obj = 0;
-            
-            for (int e=0; e<num_edges; ++e)
-                obj += (c[e])*(x_fvar[e]);
-            
-            sub_model->setObjective(obj, GRB_MINIMIZE);
-
-            sub_model->set(GRB_IntParam_OutputFlag, 0);
-            sub_model->update();
-
-            // solve sub_model
-            try
-            {
-                sub_model->optimize();
-            }
-            catch (GRBException e)
-            {
-                cout << "Error code = " << e.getErrorCode() << endl;
-                cout << e.getMessage() << endl;
-            }
-            catch (...)
-            {
-                cerr << "UNEXPECTED ERROR WHILE SOLVING MINCUT SUBPROBLEM MODEL" << endl;
-            }
-            
-            // 2. THERE EXISTS A VIOLATED SEC IFF A MAX FLOW (MIN CUT) < 1
-            double mincut = sub_model->get(GRB_DoubleAttr_ObjVal);
-
-            if (mincut < 1)
-            {
-                // 3. RETRIEVE CUTSET S
-                vector<double> duals;
-                for (long i=0; i < num_vertices; ++i)
-                {
-                    double tmp = y_fvar[i].get(GRB_DoubleAttr_X);
-                    if (tmp > EPSILON_TOL)
-                        duals.push_back(tmp);
-                    else
-                        duals.push_back(0);
-                }
-
-                long fl_count_v = 0;
-                vector<bool> fl_chk_v = vector<bool>(num_vertices, false);
-                
-                for (long fl=0; fl<num_vertices; ++fl)
-                {
-                    // vars in S are set to 1 (others are 0) in optimal solution
-                    if (duals[fl] >= 0.5)
-                    {
-                        fl_chk_v[fl] = true;
-                        ++fl_count_v;
-                    }
-                }
-            
-
-                // 4. FIND VIOLATED SEC (USING S OR ITS COMPLEMENT)
-                
-                double fl_chk_violated = 0;
-                
-                GRBLinExpr violated_constraint = 0;
-                
-                for (long i=0; i<num_vertices; ++i)
-                {
-                    for (long j=i+1; j<num_vertices; ++j)
-                    {
-                        long idx = instance->graph->index_matrix[i][j];
-                        if(idx >= 0 && fl_chk_v[i] && fl_chk_v[j])
-                        {
-                            // will use this only if adding first cut found (not the most violated)
-                            violated_constraint += x[idx];
-                            
-                            // value at current solution
-                            fl_chk_violated += x_val[idx];
-                        }
-                    }
-                }
-
-                // checked vertices yield sec
-                if ( fl_chk_violated > ((double) fl_count_v - 1.0 - VIOLATION_TOL) )
-                {
-                    if (fl_count_v == 0 || fl_count_v == num_vertices)
-                        cerr << endl << endl << "\t\tNUNCA DEVERIA ACONTECER: SEC COM S NAO PROPRIO" << endl;
-                    else
-                    {
-                        separated = true;  // flag a cut was found
-
-                        cuts_lhs.push_back(violated_constraint);
-                        cuts_rhs.push_back(fl_count_v - 1);
-                    }
-                }
-                else   // unchecked vertices (complement of S) yield sec
-                {
-                    fl_count_v = num_vertices - fl_count_v;
-                    if (fl_count_v == 0 || fl_count_v == num_vertices)
-                        cerr << endl << endl << "\t\tINESPERADO: COMPLEMENTO DE S E\' VAZIO OU NAO PROPRIO" << endl;
-                    else
-                    {
-                        GRBLinExpr alt_violated_constraint = 0;
-                        fl_chk_violated = 0;
-                        
-                        for (long i=0; i<num_vertices; ++i)
-                        {
-                            for (long j=i+1; j<num_vertices; ++j)
-                            {
-                                int idx = instance->graph->index_matrix[i][j];
-                                if(idx >= 0 && !fl_chk_v[i] && !fl_chk_v[j])
-                                {
-                                    // will use this only if adding first cut found (not the most violated)
-                                    alt_violated_constraint += x[idx];
-                                    
-                                    // value at current solution
-                                    fl_chk_violated += x_val[idx];
-                                }
-                            }
-                        }
-                        
-                        if ( fl_chk_violated > ((double) fl_count_v - 1.0 - VIOLATION_TOL) )
-                        {
-                            separated = true;  // flag a cut was found
-                            
-                            cuts_lhs.push_back(alt_violated_constraint);
-                            cuts_rhs.push_back(fl_count_v - 1);
-                        }
-                        else
-                            cerr << endl << endl << "\t\tINESPERADO: MINCUT < 1 MAS SEPARACAO NAO FORNECE SEC VIOLADA!" << endl;
-                    }
-                }
-            }
-
-            delete[] x_fvar;
-            delete[] y_fvar;
-            delete sub_model;
         }
     }
     
-    delete sub_env;
+    cout << "sum = " << cutset_var_sum << " (while |S|-1= " << cutset_size - 1 << ")" << endl;
 
-    return separated;
+    // checked vertices yield sec
+    if ( cutset_var_sum > ((double) cutset_size - 1.0 - VIOLATION_TOL) )
+    {
+        if (cutset_size == 0 || cutset_size == instance->graph->num_vertices)
+            cerr << endl << endl << "\t\tUNEXPECTED ERROR: NON PROPER SUBSET S IN A SEC" << endl;
+        else
+        {
+            #ifdef DEBUG
+            cout << "Added cut: " ;
+            for (vector<long>::iterator it = cutset_induced_edges.begin(); it != cutset_induced_edges.end(); ++it)
+                cout << "+ x[" << *it << "] ";
+            cout << "<= " << cutset_size - 1 << endl;
+            #endif
+
+            // store sec (caller method adds it to the model)
+            cuts_lhs.push_back(violated_constraint);
+            cuts_rhs.push_back(cutset_size - 1);
+            return true;
+        }
+    }
+
+    return false;
 }

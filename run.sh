@@ -1,15 +1,13 @@
 #!/bin/bash
 
-for entry in "input/zhang-instances/z100-300-"*
+#for entry in "input/zhang-instances/"*
+for entry in "input/zhang-instances/z200-400-13660.gcc" "input/zhang-instances/z300-800-3196.gcc"
 do
     echo "$entry"
-
-    n=2
-    while [ $n -le 3 ]
-    do
-        echo -n $n" "
-        output=$(./kstab $entry $n | tail -n 1)
-        echo $output
-        n=$(( n+1 ))
-    done
+    output=$(./ldda $entry | tail -n 3)
+    echo "$output"
 done
+
+
+
+
