@@ -7,6 +7,7 @@
 #include <stack>
 #include <set>
 #include <sys/time.h>
+#include <utility>
 
 #include "gurobi_c++.h"
 
@@ -22,6 +23,7 @@ using namespace lemon::concepts;
 #include "kstab_model.h"
 
 #define VIOLATION_TOL 0.0001
+#define SEPARATION_PRECISION 10
 
 /***
  * \file mstcc_model.h

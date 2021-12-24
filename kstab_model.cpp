@@ -58,6 +58,7 @@ void KStabModel::create_constraints()
     model->addConstr(fix_card == this->fixed_cardinality, cname.str());
 
     // 2. EDGE INEQUALITIES
+    /*
     for (long e=0; e < instance->num_conflicts; e++)
     {
         long u = instance->conflicts[e].first;
@@ -71,6 +72,7 @@ void KStabModel::create_constraints()
         cname << "C2_edge_" << u << "_" << v;
         model->addConstr(edge_ineq <= 1, cname.str());
     }
+    */
 
     model->update();
 }
