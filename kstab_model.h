@@ -32,7 +32,7 @@ class KStabModel
 {
 public:
     KStabModel(IO*);
-    ~KStabModel();
+    virtual ~KStabModel();
     
     int solve(bool);
     long solution_weight;

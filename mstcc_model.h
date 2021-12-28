@@ -22,8 +22,8 @@ using namespace lemon::concepts;
 #include "io.h"
 #include "kstab_model.h"
 
-#define VIOLATION_TOL 0.0001
-#define SEPARATION_PRECISION 10
+#define SEC_VIOLATION_TOL 0.0001
+#define SEC_SEPARATION_PRECISION 10
 
 /***
  * \file mstcc_model.h
@@ -51,7 +51,7 @@ class StableSpanningTreeModel: public KStabModel
 {
 public:
     StableSpanningTreeModel(IO*);
-    ~StableSpanningTreeModel();
+    virtual ~StableSpanningTreeModel();
     
     bool solve_lp_relax(bool); // full model (with SEC in the ORIGINAL GRAPH)
     double lp_bound;
@@ -63,11 +63,10 @@ private:
 
     statistics *stats;
 
-    bool separate_SEC(vector<GRBLinExpr> &, vector<long> &);
     bool separate_SEC_integer(vector<GRBLinExpr> &, vector<long> &);
-    bool separate_SEC_fallback(vector<GRBLinExpr> &, vector<long> &);
+    bool separate_SEC_folklore(vector<GRBLinExpr> &, vector<long> &);
+    bool separate_SEC_classical(vector<GRBLinExpr> &, vector<long> &);
     void dfs_checking_acyclic(long, long, vector<bool> &, long &, stack<long> &, vector< list<long> > &, bool &);
-    void dfs_to_count(long, bool *, bool **, vector<long> &, vector< list<long> > &, long*, long*);
 };
 
 #endif

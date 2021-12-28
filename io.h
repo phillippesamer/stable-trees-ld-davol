@@ -26,7 +26,7 @@ class IO
 {
 public:
     IO();
-    ~IO();
+    virtual ~IO();
     
     bool parse_gcclib(const char *);
 

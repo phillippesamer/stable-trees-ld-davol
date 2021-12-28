@@ -8,12 +8,17 @@
 #define ORTHOGONALITY_TOL 0.1
 
 // algorithm setup switches
-int USE_SEC_STRATEGY = ALL_CUTS;
-bool USE_INCUMBENT_CHECK = true;
+// set the first 3 options to true to compute the LP relaxation faster
+bool USE_DEGREE_CONSTRAINTS_A_PRIORI = false;
+bool USE_FAST_FOLKLORE_CUT = false;
 bool USE_FAST_INTEGER_CUT = true;
-bool STORE_CUT_POOL = true;
+int  USE_SEC_STRATEGY = ALL_CUTS;
+bool STORE_CUT_POOL = false;
 
-bool sort_pairs_by_snd_val(pair<long,double> a, pair<long,double> b) { return ( a.second<b.second ); }
+bool inline sort_pairs_by_snd_val(pair<long,double> a, pair<long,double> b)
+{
+    return ( a.second < b.second ); 
+}
 
 /// information of a violated subtour elimination constraint
 class violated_sec
@@ -60,24 +65,27 @@ StableSpanningTreeModel::StableSpanningTreeModel(IO *instance)
     this->lp_bound = this->lp_runtime = -1;
     stats = new statistics();
 
-    // add redundant constraints (all vertices should have degree >= 1)
-    // to make LP relaxation faster
-    ostringstream cname;
-    for (long u=0; u < instance->graph->num_vertices; u++)
+    if (USE_DEGREE_CONSTRAINTS_A_PRIORI)
     {
-        GRBLinExpr cut_edges = 0;
-        for (list<long>::iterator it = instance->graph->adj_list[u].begin();
-            it != instance->graph->adj_list[u].end(); ++it)
+        // enforce a priori that all vertices should have degree >= 1
+        // (implied by SEC), to make LP relaxation faster
+        ostringstream cname;
+        for (long u=0; u < instance->graph->num_vertices; u++)
         {
-            long edge_idx = instance->graph->index_matrix[u][*it];
-            cut_edges += x[edge_idx];
-        }
+            GRBLinExpr cut_edges = 0;
+            for (list<long>::iterator it = instance->graph->adj_list[u].begin();
+                it != instance->graph->adj_list[u].end(); ++it)
+            {
+                long edge_idx = instance->graph->index_matrix[u][*it];
+                cut_edges += x[edge_idx];
+            }
 
-        cname.str("");
-        cname << "MSTCC_degree_" << u;
-        model->addConstr(cut_edges >= 1, cname.str());
+            cname.str("");
+            cname << "MSTCC_degree_" << u;
+            model->addConstr(cut_edges >= 1, cname.str());
+        }
+        model->update();
     }
-    model->update();
 }
 
 
@@ -133,7 +141,7 @@ bool StableSpanningTreeModel::solve_lp_relax(bool logging)
         {
             model_updated = false;
 
-            #ifdef DEBUG
+            #ifdef DEBUG_LPR
             cout << "LP relaxation pass #" << lp_passes << " (bound = "
                  << model->get(GRB_DoubleAttr_ObjVal) << ")" << endl;
             #endif
@@ -144,23 +152,25 @@ bool StableSpanningTreeModel::solve_lp_relax(bool logging)
 
             if (USE_FAST_INTEGER_CUT)
             {
-                // more efficient separation procedure for an integral solution
+                // check if solution is integral and attempt more efficient
+                // separation procedure in that case
                 model_updated = separate_SEC_integer(cuts_lhs,cuts_rhs);
             }
 
-            /*
-            if (!model_updated)
+            if (!model_updated && USE_FAST_FOLKLORE_CUT)
             {
                 // if not using the integer separation or if solution is
-                // fractional, try standard separation procedure
-                model_updated = separate_SEC(cuts_lhs,cuts_rhs);
+                // fractional, try standard separation procedure (capacities 
+                // in auxiliary network equal to current vars), which is
+                // faster than the classical algorithm but inexact
+                model_updated = separate_SEC_folklore(cuts_lhs,cuts_rhs);
             }
-            */
 
             if (!model_updated)
             {
-                // TODO: replace call above by this corrected separation procedure
-                model_updated = separate_SEC_fallback(cuts_lhs,cuts_rhs);
+                // original 1983 separation procedure (capacities in auxiliary
+                // network set so as to yield most violated inequality)
+                model_updated = separate_SEC_classical(cuts_lhs,cuts_rhs);
             }
             
 
@@ -186,42 +196,6 @@ bool StableSpanningTreeModel::solve_lp_relax(bool logging)
         this->lp_runtime = ((double)clock_time / (double)1.e6);
         free(clock_start);
         free(clock_stop);
-
-        /*
-        #ifdef DEBUG
-        if (STORE_CUT_POOL)
-            cout << stats->pool.size() << " SEC cuts added" << endl;
-
-        cout << "fractional vars in the final solution of the lpr";
-        bool any_frac_var = false;
-        for (long i=0; i < this->instance->graph->num_edges; ++i)
-        {
-            double tmp = this->x[i].get(GRB_DoubleAttr_X);
-            if (tmp > EPSILON_TOL && tmp < 1 - EPSILON_TOL)
-            {
-                if (!any_frac_var)
-                {
-                    cout << endl;
-                    any_frac_var = true;
-                }
-
-                cout.precision(10);
-                cout << "\tx[ (" << instance->graph->s[i] << "," << instance->graph->t[i] << ") ] = " << this->x[i].get(GRB_DoubleAttr_X) << endl;
-            }
-        }
-        if (!any_frac_var)
-            cout << "... none!" << endl;
-
-        cout << "runtime (s): " << this->lp_runtime << endl;
-        #endif
-        */
-
-// TODO: REMOVE THIS
-instance->graph->mst();
-cout << instance->instance_id << "\t"
-     << instance->graph->mst_weight - model->get(GRB_DoubleAttr_ObjVal) << "\t"
-     << this->lp_runtime << endl;
-//model->write("mstcc_with_sec.lp");
 
         // loop might have broken because no violated SEC exists or because the problem became infeasible
         if (model->get(GRB_IntAttr_Status) == GRB_OPTIMAL)
@@ -318,7 +292,7 @@ bool StableSpanningTreeModel::separate_SEC_integer( vector<GRBLinExpr> &cuts_lhs
     if (s_.size() == (unsigned) instance->graph->num_edges)
     {
         /*
-        #ifdef DEBUG
+        #ifdef DEBUG_LPR
         cout << "trying fast integer cut... ";
         #endif
         */
@@ -362,7 +336,7 @@ bool StableSpanningTreeModel::separate_SEC_integer( vector<GRBLinExpr> &cuts_lhs
             GRBLinExpr violated_constraint = 0;
             
             /*
-            #ifdef DEBUG
+            #ifdef DEBUG_LPR
             cout << "success: ";
             #endif
             */
@@ -375,7 +349,7 @@ bool StableSpanningTreeModel::separate_SEC_integer( vector<GRBLinExpr> &cuts_lhs
                 violated_constraint += x[cycle_edges.top()];
 
                 /*
-                #ifdef DEBUG
+                #ifdef DEBUG_LPR
                 cout << "+ x[" << cycle_edges.top() << "]";
                 #endif
                 */
@@ -388,7 +362,7 @@ bool StableSpanningTreeModel::separate_SEC_integer( vector<GRBLinExpr> &cuts_lhs
             cuts_rhs.push_back(cycle_size - 1);
 
             /*
-            #ifdef DEBUG
+            #ifdef DEBUG_LPR
             cout << " <= " << cycle_size-1 << endl;
             #endif
             */
@@ -397,7 +371,7 @@ bool StableSpanningTreeModel::separate_SEC_integer( vector<GRBLinExpr> &cuts_lhs
         }
 
         /*
-        #ifdef DEBUG
+        #ifdef DEBUG_LPR
         cout << "done" << endl;
         #endif
         */
@@ -407,32 +381,27 @@ bool StableSpanningTreeModel::separate_SEC_integer( vector<GRBLinExpr> &cuts_lhs
 }
 
 
-bool StableSpanningTreeModel::separate_SEC( vector<GRBLinExpr> &cuts_lhs,
-                                            vector<long> &cuts_rhs )
+bool StableSpanningTreeModel::separate_SEC_folklore( vector<GRBLinExpr> &cuts_lhs,
+                                                     vector<long> &cuts_rhs )
 {
     /***
-     * solve the separation problem for subtour elimination constraints
+     * try to solve the separation problem for subtour elimination constraints
+     * with a faster (inexact) procedure: just like the regular 1983 method of
+     * Padberg and Wolsey, but on a simpler network whose arc capacities are
+     * exactly the values of the corresponding vars in the current solution
      */
 
+    // prevent floating point errors by ignoring digits beyond set precision 
     vector<double> x_val;
     for (long i=0; i < instance->graph->num_edges; ++i)
     {
         double tmp1 = this->x[i].get(GRB_DoubleAttr_X);
 
-        double tmp2 = tmp1 * std::pow(10,SEPARATION_PRECISION);
+        double tmp2 = tmp1 * std::pow(10,SEC_SEPARATION_PRECISION);
         tmp2 = std::round(tmp2);
-        tmp2 = tmp2 * std::pow(10,-SEPARATION_PRECISION);
+        tmp2 = tmp2 * std::pow(10,-SEC_SEPARATION_PRECISION);
 
         x_val.push_back(tmp2);
-
-        /*
-        if (tmp < EPSILON_TOL)
-            x_val.push_back(0.0);
-        else if (tmp > 1.0 - EPSILON_TOL)
-            x_val.push_back(1.0);
-        else
-            x_val.push_back(tmp);
-        */
     }
 
     // LEMON digraph representing the current solution
@@ -566,7 +535,7 @@ bool StableSpanningTreeModel::separate_SEC( vector<GRBLinExpr> &cuts_lhs,
                             if (USE_SEC_STRATEGY == ALL_CUTS)
                             {
                                 /*
-                                #ifdef DEBUG
+                                #ifdef DEBUG_LPR
                                 cout << "Added cut: " ;
                                 for (vector<long>::iterator it = sec->S.begin(); it != sec->S.end(); ++it)
                                     cout << "+ x[" << *it << "] ";
@@ -650,7 +619,7 @@ bool StableSpanningTreeModel::separate_SEC( vector<GRBLinExpr> &cuts_lhs,
                                 if (USE_SEC_STRATEGY == ALL_CUTS)
                                 {
                                     /*
-                                    #ifdef DEBUG
+                                    #ifdef DEBUG_LPR
                                     cout << "Added cut: " ;
                                     for (vector<long>::iterator it = sec->S.begin(); it != sec->S.end(); ++it)
                                         cout << "+ x[" << *it << "] ";
@@ -699,7 +668,7 @@ bool StableSpanningTreeModel::separate_SEC( vector<GRBLinExpr> &cuts_lhs,
     if (separated > 0 && USE_SEC_STRATEGY != ALL_CUTS)
     {
         /*
-        #ifdef DEBUG
+        #ifdef DEBUG_LPR
         cout << "Added cut(s):" << endl;
         #endif
         */
@@ -718,7 +687,7 @@ bool StableSpanningTreeModel::separate_SEC( vector<GRBLinExpr> &cuts_lhs,
             violated_constraint += x[idx];
 
             /*
-            #ifdef DEBUG
+            #ifdef DEBUG_LPR
                 cout << "+ x[" << idx << "] ";
             #endif
             */
@@ -732,7 +701,7 @@ bool StableSpanningTreeModel::separate_SEC( vector<GRBLinExpr> &cuts_lhs,
             stats->pool[cuts[most_violated_idx]->toString()] = 1;
         
         /*
-        #ifdef DEBUG
+        #ifdef DEBUG_LPR
         cout << "<= " << cuts[most_violated_idx]->vertex_count - 1 << endl;
         #endif
         */
@@ -807,7 +776,7 @@ bool StableSpanningTreeModel::separate_SEC( vector<GRBLinExpr> &cuts_lhs,
                             stats->pool[cuts[cut_idx]->toString()] = 1;
 
                         /*
-                        #ifdef DEBUG
+                        #ifdef DEBUG_LPR
                         for (vector<long>::iterator it = cuts[cut_idx]->S.begin(); it != cuts[cut_idx]->S.end(); ++it)
                             cout << "+ x[" << *it << "] ";
                         cout << "<= " << cuts[cut_idx]->vertex_count - 1 << endl;
@@ -823,40 +792,30 @@ bool StableSpanningTreeModel::separate_SEC( vector<GRBLinExpr> &cuts_lhs,
     } // enhanced cut addition strategies
 
     // clean up
-    //for(vector<violated_sec*>::iterator it=cuts.begin(); it!=cuts.end(); ++it)
-    //    delete (*it);
     cuts.clear();
 
     return (separated > 0);
 }
 
 
-bool StableSpanningTreeModel::separate_SEC_fallback( vector<GRBLinExpr> &cuts_lhs,
-                                                     vector<long> &cuts_rhs )
+bool StableSpanningTreeModel::separate_SEC_classical( vector<GRBLinExpr> &cuts_lhs,
+                                                      vector<long> &cuts_rhs )
 {
     /***
      * Solve the separation problem for subtour elimination constraints.
      * Original reference: 1983 Trees and cuts [Padberg, Wolsey]
      */
 
+    // prevent floating point errors by ignoring digits beyond set precision 
     vector<double> x_val;
     vector<double> x_singleton_cap(instance->graph->num_vertices, 0.);
     for (long i=0; i < instance->graph->num_edges; ++i)
     {
-        // current solution values, up to the precision set
-        /*
-        if (tmp < EPSILON_TOL)
-            x_val.push_back(0.0);
-        else if (tmp > 1.0 - EPSILON_TOL)
-            x_val.push_back(1.0);
-        else
-            x_val.push_back(tmp);
-        */
         double tmp1 = this->x[i].get(GRB_DoubleAttr_X);
 
-        double tmp2 = tmp1 * std::pow(10,SEPARATION_PRECISION);
+        double tmp2 = tmp1 * std::pow(10,SEC_SEPARATION_PRECISION);
         tmp2 = std::round(tmp2);
-        tmp2 = tmp2 * std::pow(10,-SEPARATION_PRECISION);
+        tmp2 = tmp2 * std::pow(10,-SEC_SEPARATION_PRECISION);
 
         x_val.push_back(tmp2);
 
@@ -970,23 +929,19 @@ bool StableSpanningTreeModel::separate_SEC_fallback( vector<GRBLinExpr> &cuts_lh
 
     } // |V| min cut computations
 
-    // inspect cutsets in order of increasing capacity
-    sort(cuts_values.begin(), cuts_values.end(), sort_pairs_by_snd_val);
-
     /***
      * 4. CHECK CUTS IN ORDER OF CAPACITY, ADDING VIOLATED INEQUALITIES (IF ANY)
      * ACCORDING TO CUT INCLUSION STRATEGIES: MOST VIOLATED CUT ONLY, ALL CUTS,
      * OR THE MOST VIOLATED AND THOSE CLOSE ENOUGH TO BEING ORTHOGONAL TO IT
      */
 
-    double most_violated = -1;
-    long most_violated_idx = -1;
-    map<string,long> counting_cuts;  // store how many different cuts were found
+    sort(cuts_values.begin(), cuts_values.end(), sort_pairs_by_snd_val);
 
     long separated = 0;
+    map<string,long> counting_cuts;  // store how many different cuts were found
+
     bool done = false;
     vector<pair<long,double> >::iterator cut_it = cuts_values.begin();
-
     while ( cut_it != cuts_values.end() && !done )
     {
         // for each cut, inspect whether the cutset yields a violated SEC 
@@ -1022,155 +977,56 @@ bool StableSpanningTreeModel::separate_SEC_fallback( vector<GRBLinExpr> &cuts_lh
             }
         }
         
-        // 5.1 VERTICES IN THE CUTSET YIELD VIOLATED SEC
-        // TODO: NO NEED FOR A TOLERANCE HERE? if ( cutset_var_sum > ((double) cutset_size - 1.0 + VIOLATION_TOL) )
+        // 5. VERTICES IN THE CUTSET YIELD VIOLATED SEC
+        // TODO: NO NEED FOR A TOLERANCE HERE? if ( cutset_var_sum > ((double) cutset_size - 1.0 + SEC_VIOLATION_TOL) )
         if ( cutset_var_sum > ((double) cutset_size - 1.0) )
         {
-            if (cutset_size == 0 || cutset_size == instance->graph->num_vertices)
-                cerr << endl << endl << "\t\tUNEXPECTED ERROR: NON PROPER SUBSET S IN A SEC" << endl;
-            else
+            ++separated;  // flag a cut was found
+
+            sec->vertex_count = cutset_size;
+            sec->infeasibility = (double) cutset_var_sum 
+                    - ((double)cutset_size-1.);
+
+            string sec_id = sec->toString();
+
+            if (counting_cuts[sec_id] <= 0)
             {
-                ++separated;  // flag a cut was found
+                // first time seeing this inequality
+                counting_cuts[sec_id] = 1;
 
-                sec->vertex_count = cutset_size;
-                sec->infeasibility = (double) cutset_var_sum 
-                        - ((double)cutset_size-1.);
-
-                // counting different cuts (only relevant when including all/orthogonal cuts)
-                string sec_id = sec->toString();
-
-                if (counting_cuts[sec_id] <= 0)
+                if (USE_SEC_STRATEGY == ALL_CUTS)
                 {
-                    // first time seeing this inequality
-                    counting_cuts[sec_id] = 1;
+                    /*
+                    #ifdef DEBUG_LPR
+                    cout << "Added cut: " ;
+                    for (vector<long>::iterator it = sec->S.begin(); it != sec->S.end(); ++it)
+                        cout << "+ x[" << *it << "] ";
+                    cout << "<= " << sec->vertex_count - 1 << endl;
+                    #endif
+                    */
 
-                    if (USE_SEC_STRATEGY == ALL_CUTS)
-                    {
-                        /*
-                        #ifdef DEBUG
-                        cout << "Added cut: " ;
-                        for (vector<long>::iterator it = sec->S.begin(); it != sec->S.end(); ++it)
-                            cout << "+ x[" << *it << "] ";
-                        cout << "<= " << sec->vertex_count - 1 << endl;
-                        #endif
-                        */
+                    // store sec (caller method adds it to the model)
+                    cuts_lhs.push_back(violated_constraint);
+                    cuts_rhs.push_back(cutset_size - 1);
 
-                        // store sec (caller method adds it to the model)
-                        cuts_lhs.push_back(violated_constraint);
-                        cuts_rhs.push_back(cutset_size - 1);
-
-                        if (STORE_CUT_POOL)
-                            stats->pool[sec_id] = 1;
-                    }
-                    else   // will inspect and add SECs selectively 
-                    {
-                        delay_sec_destruction = true;
-                        cuts.push_back(sec);
-
-                        if (sec->infeasibility > most_violated)
-                        {
-                            most_violated = sec->infeasibility;
-                            most_violated_idx = cuts.size() - 1;
-                        }
-                    }
+                    if (STORE_CUT_POOL)
+                        stats->pool[sec_id] = 1;
                 }
-                else
-                    counting_cuts[sec_id] = counting_cuts[sec_id] + 1;
+                else   // will inspect and add SECs selectively 
+                {
+                    delay_sec_destruction = true;
+                    cuts.push_back(sec);
+                }
             }
+            else
+                counting_cuts[sec_id] = counting_cuts[sec_id] + 1;
         }
-
-        // 5.2 VERTICES IN THE COMPLEMENT OF THE CUTSET YIELDS VIOLATED SEC
         else
         {
+            // inequalities are sorted in violation order, so we may stop as
+            // soon as a non-violated one is found
             done = true;
         }
-        /*
-        {
-            cutset_size = instance->graph->num_vertices - cutset_size;
-            if (cutset_size == 0 || cutset_size == instance->graph->num_vertices)
-                cerr << endl << endl << "\t\tUNEXPECTED ERROR: NON PROPER SUBSET S\' IN A SEC" << endl;
-            else
-            {
-                sec->reset();
-
-                GRBLinExpr alt_violated_constraint = 0;
-                cutset_var_sum = 0;
-                
-                // lhs: vars (x) corresponding to edges within unchecked vertices
-                for (long i=0; i<instance->graph->num_vertices; ++i)
-                {
-                    for (long j=i+1; j<instance->graph->num_vertices; ++j)
-                    {
-                        long edge_idx = instance->graph->index_matrix[i][j];
-                        if(edge_idx >= 0 && !chk_v[i] && !chk_v[j])
-                        {
-                            alt_violated_constraint += x[edge_idx];
-
-                            sec->S.push_back(edge_idx);
-                            sec->coefficients[edge_idx] = true;
-                            
-                            // current value of vars, to compute violation
-                            cutset_var_sum += x_val[edge_idx];
-                        }
-                    }
-                }
-                
-                // TODO: NO NEED FOR A TOLERANCE HERE? if ( cutset_var_sum > ((double) cutset_size - 1.0 + VIOLATION_TOL) )
-                if ( cutset_var_sum > ((double) cutset_size - 1.0) )
-                {
-cout.precision(12);
-cout << endl << endl << "HAD TO INCLUDE SEC FROM COMPLEMENT" << cutset_var_sum << " > |\\bar S|-1 = " << (double) cutset_size - 1.0 << endl;
-
-                    ++separated;  // flag a cut was found
-
-                    sec->vertex_count = cutset_size;
-                    sec->infeasibility = (double) cutset_var_sum 
-                        - ((double)cutset_size-1.);
-
-cout << "violation: " << sec->infeasibility << endl;
-
-                    // counting different cuts (only relevant when including all/orthogonal cuts)
-                    string sec_id = sec->toString();
-
-                    if (counting_cuts[sec_id] <= 0)
-                    {
-                        // first time seeing this inequality
-                        counting_cuts[sec_id] = 1;
-
-                        if (USE_SEC_STRATEGY == ALL_CUTS)
-                        {
-                            //#ifdef DEBUG
-                            //cout << "Added cut: " ;
-                            //for (vector<long>::iterator it = sec->S.begin(); it != sec->S.end(); ++it)
-                            //    cout << "+ x[" << *it << "] ";
-                            //cout << "<= " << sec->vertex_count - 1 << endl;
-                            //#endif
-
-                            // store sec (caller method adds it to the model)
-                            cuts_lhs.push_back(alt_violated_constraint);
-                            cuts_rhs.push_back(cutset_size - 1);
-
-                            if (STORE_CUT_POOL)
-                                stats->pool[sec_id] = 1;
-                        }
-                        else   // will inspect and add SECs selectively
-                        {
-                            delay_sec_destruction = true;
-                            cuts.push_back(sec);
-
-                            if (sec->infeasibility > most_violated)
-                            {
-                                most_violated = sec->infeasibility;
-                                most_violated_idx = cuts.size() - 1;
-                            }
-                        }
-                    }
-                    else
-                        counting_cuts[sec_id] = counting_cuts[sec_id] + 1;
-                }
-            }
-        }
-        */
 
         if (!delay_sec_destruction)
             delete sec;
@@ -1186,11 +1042,8 @@ cout << "violation: " << sec->infeasibility << endl;
 
     if (separated > 0 && USE_SEC_STRATEGY != ALL_CUTS)
     {
-        /*
-        #ifdef DEBUG
-        cout << "Added cut(s):" << endl;
-        #endif
-        */
+        // the most violated inequality is given by the first cut above
+        long most_violated_idx = 0;
 
         // counting different cuts
         stats->sec_diff_cuts.push_back(counting_cuts.size());
@@ -1204,12 +1057,6 @@ cout << "violation: " << sec->infeasibility << endl;
         {
             long idx = cuts[most_violated_idx]->S.at(e);
             violated_constraint += x[idx];
-
-            /*
-            #ifdef DEBUG
-                cout << "+ x[" << idx << "] ";
-            #endif
-            */
         }
         
         // store sec (caller method adds it to the model)
@@ -1219,17 +1066,11 @@ cout << "violation: " << sec->infeasibility << endl;
         if (STORE_CUT_POOL)
             stats->pool[cuts[most_violated_idx]->toString()] = 1;
 
-        /*
-        #ifdef DEBUG
-        cout << "<= " << cuts[most_violated_idx]->vertex_count - 1 << endl;
-        #endif
-        */
-
-        // we are done if the strategy is to add just the most violated cut
+        // 6.2 WE ARE DONE IF THE STRATEGY IS TO ADD JUST THE MOST VIOLATED CUT
 
         if (USE_SEC_STRATEGY == ORTHOGONAL_CUTS)
         {
-            // 6.2 ADD ANY OTHER CUT WHOSE HYPERPLANE HAS INNER PRODUCT WITH THAT
+            // 6.3 ADD ANY OTHER CUT WHOSE HYPERPLANE HAS INNER PRODUCT WITH THAT
             // OF THE MOST VIOLATED CUT CLOSE TO ZERO
 
             // 2-norm of the vector corresponding to most violated inequality
@@ -1293,14 +1134,6 @@ cout << "violation: " << sec->infeasibility << endl;
                         
                         if (STORE_CUT_POOL)
                             stats->pool[cuts[cut_idx]->toString()] = 1;
-
-                        /*
-                        #ifdef DEBUG
-                        for (vector<long>::iterator it = cuts[cut_idx]->S.begin(); it != cuts[cut_idx]->S.end(); ++it)
-                            cout << "+ x[" << *it << "] ";
-                        cout << "<= " << cuts[cut_idx]->vertex_count - 1 << endl;
-                        #endif
-                        */
                     }
                 }
 
@@ -1310,8 +1143,6 @@ cout << "violation: " << sec->infeasibility << endl;
     } // enhanced cut addition strategies
 
     // clean up
-    //for(vector<violated_sec*>::iterator it=cuts.begin(); it!=cuts.end(); ++it)
-    //    delete (*it);
     cuts.clear();
 
     return (separated > 0);

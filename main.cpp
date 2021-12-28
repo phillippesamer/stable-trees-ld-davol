@@ -62,51 +62,51 @@ int main(int argc, char **argv)
 
     // LP relaxation bound
     StableSpanningTreeModel *lpr_model = new StableSpanningTreeModel(instance);
-    if (lpr_model->solve_lp_relax(false))
+    if ( lpr_model->solve_lp_relax(false) )
     {
-        /*
         cout << "_____________________________________________________________________________" << endl << endl;
         cout << "lp_bound = " << lpr_model->lp_bound
              << " (" << lpr_model->lp_passes << " passes,"
              << " runtime: " << lpr_model->lp_runtime << ")" << endl;
         cout << "_____________________________________________________________________________" << endl << endl;
-        */
-        // TODO: check acyclic solution
-    }
-    delete lpr_model;
 
-    /*
-    // Lagrangean Decomposition bound
-    KStabModel *model = new KStabModel(instance);
-    LDDA *lagrangean = new LDDA(instance, model);
+        delete lpr_model;
 
-    start_timer();
-    lagrangean->dual_ascent(false);
-    get_timer();
+        // Lagrangean Decomposition bound
+        KStabModel *model = new KStabModel(instance);
+        LDDA *lagrangean = new LDDA(instance, model);
 
-    // write log file (input file name + "_ldda.log")
-    stringstream log = lagrangean->create_log();
+        start_timer();
+        lagrangean->dual_ascent(false);
+        get_timer();
 
-    char buffer[200];
-    int cx = snprintf(buffer, 200, "%s_ldda.log", argv[1]);
-    ofstream logfile(buffer);
-    if (cx>=0 && cx<200 && logfile.is_open())
-    {
-        logfile << log.str();
-        logfile.close();
+        // write log file (input file name + "_ldda.log")
+        stringstream log = lagrangean->create_log();
+
+        char buffer[200];
+        int cx = snprintf(buffer, 200, "%s_ldda.log", argv[1]);
+        ofstream logfile(buffer);
+        if (cx>=0 && cx<200 && logfile.is_open())
+        {
+            logfile << log.str();
+            logfile.close();
+        }
+        else
+        {
+            cout << log.str();
+            cout << "ERROR: unable to write log file; dumped to screen" << endl;
+        }
+
+        // clean up
+        free(clock_start);
+        delete lagrangean;
+        delete model;
     }
     else
     {
-        cout << log.str();
-        cout << "ERROR: unable to write log file; dumped to screen" << endl;
+        delete lpr_model;
     }
 
-    // clean up
-    free(clock_start);
-    delete lagrangean;
-    delete model;
-    */
     delete instance;
-
     return 0;
 }

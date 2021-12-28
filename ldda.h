@@ -20,7 +20,7 @@ class LDDA
 public:
     LDDA(IO*, KStabModel*);
     LDDA(IO*, KStabModel*, vector<long>);
-    ~LDDA();
+    virtual ~LDDA();
 
     bool dual_ascent(bool);
     bool problem_solved;

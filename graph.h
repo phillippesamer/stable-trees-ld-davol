@@ -33,7 +33,7 @@ class Graph
 public:
     Graph();
     Graph(long, long);
-    ~Graph();
+    virtual ~Graph();
 
     void init_index_matrix();
     void free_index_matrix();
