@@ -10,7 +10,8 @@
 /***
  * \file ldda.h
  * 
- * Module for the operations within Lagrangean Decomposition based dual ascent.
+ * Module for computing (approximately) the Lagrangean Decomposition bound
+ * with a dual ascent algorithm.
  * 
  * \author Phillippe Samer <phillippes@gmail.com>
  * \date 04.11.2021
@@ -29,7 +30,7 @@ public:
 
     vector< vector<long> > multipliers_log;  // lambda[iteration][var_index]
     vector<long> bound_log;
-    vector< pair<long, vector<bool> > > solution_pool; // feasible points found
+    vector< pair<long, vector<bool> > > solution_pool; // (weight, feasible point)
 
     vector< pair<long,bool> > fixed_vars;   // vars fixed during execution
     IO* flush_fixes_to_instance();

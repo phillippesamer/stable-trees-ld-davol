@@ -13,17 +13,13 @@ LDDA::LDDA(IO *instance, KStabModel *model)
     this->contracted_edges = vector<long>();
     this->contracted_edges_mask = vector<bool>(instance->graph->num_edges, false);
 
-    // backup original weights to restore later
     original_weights = vector<long>(instance->graph->w);
 
     // initialize multipliers at half the original weights
     multipliers_log = vector< vector<long> >();
     multipliers_log.push_back( vector<long>(instance->graph->num_edges, 0) ); //////////// !!!!!!!!!!!!!!!!!  //////////// !!!!!!!!!!!!!!!!!  //////////// !!!!!!!!!!!!!!!!!
     for (long idx=0; idx < instance->graph->num_edges; ++idx)
-    {
-        //multipliers_log[0][idx] = (long) pow(-1, idx)*(idx % 2);
         multipliers_log[0][idx] = round(original_weights[idx] / 2);
-    }
 }
 
 LDDA::LDDA(IO *instance, KStabModel *model, vector<long> initial_multipliers)
@@ -39,7 +35,6 @@ LDDA::LDDA(IO *instance, KStabModel *model, vector<long> initial_multipliers)
     this->contracted_edges = vector<long>();
     this->contracted_edges_mask = vector<bool>(instance->graph->num_edges, false);
 
-    // backup original weights to restore later
     original_weights = vector<long>(instance->graph->w);
 
     // use given values as the initial multipliers
@@ -87,21 +82,19 @@ bool LDDA::dual_ascent(bool steepest_ascent)
                instance->graph->w.begin(),
                minus<long>() );
 
-    #ifdef DEBUG
-        cout << endl << "Lagrangean Decomposition Dual Ascent" << endl << endl;
-        // log format
-        cout << setw(9) << "feasible?";
-        cout << setw(9) << "iter";
-        cout << setw(9) << "bound";
-        cout << setw(12) << "#attempts";
-        cout << setw(12) << "direction";
-        cout << setw(12) << "adjustment";
-        cout << setw(9) << "mst (s)";
-        cout << setw(13) << "kstab (s)";
-        cout << setw(13) << "iter (s)";
-        cout << setw(13) << "varsfixed";
-        cout << endl;
-    #endif
+    // log format
+    cout << endl << "Lagrangean Decomposition Dual Ascent" << endl << endl;
+    cout << setw(9) << "feasible?";
+    cout << setw(9) << "iter";
+    cout << setw(9) << "bound";
+    cout << setw(12) << "#attempts";
+    cout << setw(12) << "direction";
+    cout << setw(12) << "adjustment";
+    cout << setw(9) << "mst (s)";
+    cout << setw(13) << "kstab (s)";
+    cout << setw(13) << "iter (s)";
+    cout << setw(13) << "varsfixed";
+    cout << endl;
 
     instance->graph->update_all_weights(instance->graph->w);
 
@@ -136,12 +129,14 @@ bool LDDA::dual_ascent(bool steepest_ascent)
          * the LEMON data structure only!) are missing in later spanning trees,
          * so we include them here
          */
-        instance->graph->mst_weight += contracted_edges_weight;
+        long contracted_edges_offset = 0;   // multiplier contributions in (w - \lambda)
         for ( vector<long>::iterator it = contracted_edges.begin();
               it != contracted_edges.end(); ++it )
         {
+            contracted_edges_offset += multipliers_log.back()[*it];
             instance->graph->mst_vector[*it] = true;
         }
+        instance->graph->mst_weight += (contracted_edges_weight - contracted_edges_offset);
 
         // 2. SOLVE KSTAB(\hat{G}, lambda^r)
 
@@ -211,14 +206,14 @@ bool LDDA::dual_ascent(bool steepest_ascent)
 
             feasible_mst = true;
 
-            cout << "the mst solution is primal feasible" << endl;
-            cout << "integer feasible point of weight " << true_cost << endl;
+            cout << "the mst solution is primal feasible ; "
+                 << "integer point of weight " << true_cost << endl;
 
             // if it has the same lambda^r cost as the kstab, than it is optimal
             if (cost_in_other_subproblem == model->solution_weight)
             {
-                cout << "the mst solution is primal feasible and dual optimal" << endl;
-                cout << "problem solved to optimality" << endl;
+                cout << "the mst solution is primal feasible and dual optimal ; "
+                     << "problem solved to optimality" << endl;
 
                 problem_solved = true;
 
@@ -248,14 +243,14 @@ bool LDDA::dual_ascent(bool steepest_ascent)
 
             feasible_kstab = true;
 
-            cout << "the kstab solution is primal feasible" << endl;
-            cout << "integer feasible point of weight " << true_cost << endl;
+            cout << "the kstab solution is primal feasible ; "
+                 << "integer point of weight " << true_cost << endl;
 
             // if it has the same (w-lambda^r) cost as the mst, than it is optimal
             if (cost_in_other_subproblem == instance->graph->mst_weight)
             {
-                cout << "the kstab solution is primal feasible and dual optimal" << endl;
-                cout << "problem solved to optimality" << endl;
+                cout << "the kstab solution is primal feasible and dual optimal ; "
+                     << "problem solved to optimality" << endl;
 
                 problem_solved = true;
 
@@ -277,7 +272,7 @@ bool LDDA::dual_ascent(bool steepest_ascent)
          */
 
         long chosen_direction = -1;
-        long chosen_adjustment = -1;
+        long chosen_adjustment = 0;
         long chosen_bound_improvement = -1;
 
         unsigned long attempt = 0;
@@ -317,7 +312,7 @@ bool LDDA::dual_ascent(bool steepest_ascent)
                 {
                     /*
                     #ifdef DEBUG
-                        cout << "mst probing bound (includes contracted weight): " << probing_mst.second + contracted_edges_weight << endl;
+                        cout << "mst probing bound (includes contracted weight): " << probing_mst.second + (contracted_edges_weight - contracted_edges_offset) << endl;
                     #endif
                     */
 
@@ -344,7 +339,7 @@ bool LDDA::dual_ascent(bool steepest_ascent)
                         // probings found feasible solutions => proceed to compute the bounds
 
                         // NB! contracted edges do not appear in Graph::mst_probing_var()
-                        long probing_mst_bound = probing_mst.second + contracted_edges_weight;
+                        long probing_mst_bound = probing_mst.second + (contracted_edges_weight - contracted_edges_offset);
                         long probing_kstab_bound = probing_kstab.second;
 
                         long del = probing_mst_bound - instance->graph->mst_weight;
@@ -413,7 +408,7 @@ bool LDDA::dual_ascent(bool steepest_ascent)
 
                 /*
                 #ifdef DEBUG
-                    cout << "mst probing bound (includes contracted weight): " << probing_mst.second + contracted_edges_weight << endl;
+                    cout << "mst probing bound (includes contracted weight): " << probing_mst.second + (contracted_edges_weight - contracted_edges_offset) << endl;
                 #endif
                 */
 
@@ -440,7 +435,7 @@ bool LDDA::dual_ascent(bool steepest_ascent)
                     // probings found feasible solutions => proceed to compute the bounds
 
                     // NB! contracted edges do not appear in Graph::mst_probing_var()
-                    long probing_mst_bound = probing_mst.second + contracted_edges_weight;
+                    long probing_mst_bound = probing_mst.second + (contracted_edges_weight - contracted_edges_offset);
                     long probing_kstab_bound = probing_kstab.second;
 
                     long del = probing_mst_bound - instance->graph->mst_weight;
@@ -483,7 +478,6 @@ bool LDDA::dual_ascent(bool steepest_ascent)
 
         if (chosen_direction > 0)
         {
-            // data structures in this object
             vector<long> next_multipliers = vector<long>( multipliers_log.back() );
             next_multipliers[chosen_direction] = next_multipliers[chosen_direction]
                                                  + chosen_adjustment;

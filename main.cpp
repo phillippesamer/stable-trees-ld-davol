@@ -37,7 +37,7 @@ void get_timer()
     unsigned long clock_time = 1.e6 * (clock_stop->tv_sec - clock_start->tv_sec) +
                                       (clock_stop->tv_usec - clock_start->tv_usec);
 
-    printf( "main() says: runtime in seconds\n%.4f\n", ((double)clock_time / (double)1.e6) );
+    printf( "\nmain() says: runtime in seconds\n%.4f\n", ((double)clock_time / (double)1.e6) );
 
     free(clock_stop);
 }
@@ -77,7 +77,7 @@ int main(int argc, char **argv)
         LDDA *lagrangean = new LDDA(instance, model);
 
         start_timer();
-        lagrangean->dual_ascent(false);
+        lagrangean->dual_ascent(true);
         get_timer();
 
         // write log file (input file name + "_ldda.log")

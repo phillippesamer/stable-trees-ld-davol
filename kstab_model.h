@@ -10,7 +10,7 @@
 
 #include "io.h"
 
-#define EPSILON_TOL 0.00001
+#define EPSILON_TOL 0.00000001
 
 enum ModelStatus {AT_OPTIMUM, IS_INFEASIBLE, STATUS_UNKNOWN};
 

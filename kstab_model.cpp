@@ -231,9 +231,10 @@ pair<ModelStatus,long> KStabModel::probe_var(long probe_idx, bool probe_value)
     #endif
     */
 
-    model->set(GRB_IntParam_OutputFlag, 0);
+    // TO DO: set output 0 and then 1 again? 
+    //model->set(GRB_IntParam_OutputFlag, 0);
     model->optimize();
-    model->set(GRB_IntParam_OutputFlag, 1);
+    //model->set(GRB_IntParam_OutputFlag, 1);
 
     // save optimization status (optimal/infeasible) and result, if optimal
     ModelStatus status = STATUS_UNKNOWN;
