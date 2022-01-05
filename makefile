@@ -1,5 +1,5 @@
 CC		    = g++ -Wall -O3 -m64
-CC_DEBUG    = g++ -Wall -O0 -m64 -Wextra -g -DDEBUG
+CC_DEBUG    = g++ -Wall -O0 -m64 -Wextra -g -DDEBUG -lefence
 FILES_CC	= graph.cpp io.cpp kstab_model.cpp mstcc_model.cpp ldda.cpp main.cpp
 BINARY		= ldda
 

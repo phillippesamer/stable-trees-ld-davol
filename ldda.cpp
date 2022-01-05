@@ -17,7 +17,7 @@ LDDA::LDDA(IO *instance, KStabModel *model)
 
     // initialize multipliers at half the original weights
     multipliers_log = vector< vector<long> >();
-    multipliers_log.push_back( vector<long>(instance->graph->num_edges, 0) ); //////////// !!!!!!!!!!!!!!!!!  //////////// !!!!!!!!!!!!!!!!!  //////////// !!!!!!!!!!!!!!!!!
+    multipliers_log.push_back( vector<long>(instance->graph->num_edges, 0) );
     for (long idx=0; idx < instance->graph->num_edges; ++idx)
         multipliers_log[0][idx] = round(original_weights[idx] / 2);
 }
@@ -65,13 +65,30 @@ bool LDDA::dual_ascent(bool steepest_ascent)
      * if some step failed.
      */
 
-    // TO DO: REMOVE THIS
-    instance->graph->mst();
-    model->solve(true);
-    cout << "_____________________________________________________________________________" << endl << endl;
-    cout << "kstab bound " << model->solution_weight << " (runtime "
-         << model->solution_runtime << ")" << endl;
-    cout << "mst bound " << instance->graph->mst_weight << endl;
+    // log format
+    cout << "LDDA: Lagrangean Decomposition based Dual Ascent" << endl;
+
+    cout << setw(63) << "";
+    cout << setw(9) << "mst  ";
+    cout << setw(9) << "mst  ";
+    cout << setw(11) << "kstab ";
+    cout << setw(11) << "kstab ";
+    cout << setw(35) << "" << endl;
+
+    cout << setw(9) << "feasible?";
+    cout << setw(9) << "iter";
+    cout << setw(9) << "bound";
+    cout << setw(12) << "#attempts";
+    cout << setw(12) << "direction";
+    cout << setw(12) << "adjustment";
+    cout << setw(9) << "weight";
+    cout << setw(9) << "runtime";
+    cout << setw(11) << "weight";
+    cout << setw(11) << "runtime";
+    cout << setw(13) << "iter (s)";
+    cout << setw(13) << "varsfixed";
+    cout << setw(7) << "obs";
+    cout << endl;
 
     // 0. INITIALIZE WEIGHTS WITH LAGRANGEAN MULTIPLIERS
 
@@ -82,22 +99,7 @@ bool LDDA::dual_ascent(bool steepest_ascent)
                instance->graph->w.begin(),
                minus<long>() );
 
-    // log format
-    cout << endl << "Lagrangean Decomposition Dual Ascent" << endl << endl;
-    cout << setw(9) << "feasible?";
-    cout << setw(9) << "iter";
-    cout << setw(9) << "bound";
-    cout << setw(12) << "#attempts";
-    cout << setw(12) << "direction";
-    cout << setw(12) << "adjustment";
-    cout << setw(9) << "mst (s)";
-    cout << setw(13) << "kstab (s)";
-    cout << setw(13) << "iter (s)";
-    cout << setw(13) << "varsfixed";
-    cout << endl;
-
     instance->graph->update_all_weights(instance->graph->w);
-
     model->update_all_weights(multipliers_log[0]);
 
     iter = 0;
@@ -108,9 +110,11 @@ bool LDDA::dual_ascent(bool steepest_ascent)
         ++iter;
         iter_update = false;
 
-        // log structures
+        // information for screen log
         bool feasible_mst = false;
+        stringstream feasible_mst_msg;
         bool feasible_kstab = false;
+        stringstream feasible_kstab_msg;
 
         struct timeval *clock_start = (struct timeval *) malloc(sizeof(struct timeval));
         struct timeval *clock_stop  = (struct timeval *) malloc(sizeof(struct timeval));
@@ -205,9 +209,8 @@ bool LDDA::dual_ascent(bool steepest_ascent)
             this->solution_pool.push_back( make_pair(true_cost, instance->graph->mst_vector) );
 
             feasible_mst = true;
-
-            cout << "the mst solution is primal feasible ; "
-                 << "integer point of weight " << true_cost << endl;
+            feasible_mst_msg = stringstream();
+            feasible_mst_msg << "mst primal feasible (weight " << true_cost << ")";
 
             // if it has the same lambda^r cost as the kstab, than it is optimal
             if (cost_in_other_subproblem == model->solution_weight)
@@ -242,9 +245,8 @@ bool LDDA::dual_ascent(bool steepest_ascent)
             this->solution_pool.push_back( make_pair(true_cost, model->solution_vector) );
 
             feasible_kstab = true;
-
-            cout << "the kstab solution is primal feasible ; "
-                 << "integer point of weight " << true_cost << endl;
+            feasible_kstab_msg = stringstream();
+            feasible_kstab_msg << "kstab primal feasible (weight " << true_cost << ")";
 
             // if it has the same (w-lambda^r) cost as the mst, than it is optimal
             if (cost_in_other_subproblem == instance->graph->mst_weight)
@@ -338,7 +340,7 @@ bool LDDA::dual_ascent(bool steepest_ascent)
 
                         // probings found feasible solutions => proceed to compute the bounds
 
-                        // NB! contracted edges do not appear in Graph::mst_probing_var()
+                        // NB! adding the weight of contracted edges, which do not appear in Graph::mst_probing_var()
                         long probing_mst_bound = probing_mst.second + (contracted_edges_weight - contracted_edges_offset);
                         long probing_kstab_bound = probing_kstab.second;
 
@@ -476,7 +478,7 @@ bool LDDA::dual_ascent(bool steepest_ascent)
 
         // 6. UPDATE MULTIPLIER \lambda^{r+1}_e, COPY THE OTHERS
 
-        if (chosen_direction > 0)
+        if (chosen_direction >= 0)
         {
             vector<long> next_multipliers = vector<long>( multipliers_log.back() );
             next_multipliers[chosen_direction] = next_multipliers[chosen_direction]
@@ -518,9 +520,9 @@ bool LDDA::dual_ascent(bool steepest_ascent)
             logline << " - ";
 
         logline << " " << setw(9) << iter;
-        logline << " " << setw(9) << bound_log.back();
+        logline << " " << setw(9) << bound_log.at(iter-1);
         logline << " " << setw(9) << attempt << "/" << mismatch.size();
-        if (chosen_direction > 0)
+        if (chosen_direction >= 0)
         {
             logline << " " << setw(9) << chosen_direction;
             logline << " " << setw(9) << chosen_adjustment;
@@ -530,16 +532,30 @@ bool LDDA::dual_ascent(bool steepest_ascent)
             logline << " " << setw(9) << "-";
             logline << " " << setw(9) << "-";
         }
-        logline << " " << fixed << setw(12) << instance->graph->mst_runtime;
-        logline << " " << fixed << setw(12) << model->solution_runtime;
+        logline << " " << setw(11) << instance->graph->mst_weight;
+        logline << " " << fixed << setw(10) << instance->graph->mst_runtime;
+        logline << " " << setw(9) << model->solution_weight;
+        logline << " " << fixed << setw(11) << model->solution_runtime;
         logline << " " << fixed << setw(12) << iter_time;
         logline << " " << setw(9) << fixed_vars.size();
 
         //logline << right << setw(0);
         //logline.unsetf(ios_base::floatfield);
 
-        cout << logline.str() << endl;
-        full_log << logline.str() << endl;
+        if (feasible_mst || feasible_kstab)
+            logline << setw(6) << "";
+
+        if (feasible_mst)
+            logline << feasible_mst_msg.str();
+
+        if (feasible_mst && feasible_kstab)
+            logline << "; ";
+
+        if (feasible_kstab)
+            logline << feasible_kstab_msg.str();
+
+        cout << logline.str() << endl;      // screen log
+        full_log << logline.str() << endl;  // full log, dumped when create_log() is called
     }
     while (iter_update);
 

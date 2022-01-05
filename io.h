@@ -30,8 +30,9 @@ public:
     
     bool parse_gcclib(const char *);
 
-    long num_vertices() { return graph->num_vertices; }
-    long num_edges() { return graph->num_edges; }
+    bool run_mst() { return graph->mst(); }
+    long get_mst_weight() { return graph->mst_weight; }
+    double get_mst_runtime() { return graph->mst_runtime; }
 
     bool test_stability(vector<bool> &);
     bool test_acyclic(vector<bool> &);

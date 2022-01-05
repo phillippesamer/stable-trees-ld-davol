@@ -60,22 +60,34 @@ int main(int argc, char **argv)
         return 0;
     }
 
-    // LP relaxation bound
+    // LP relaxation bound of the MSTCC natural IP formulation
     StableSpanningTreeModel *lpr_model = new StableSpanningTreeModel(instance);
+
     if ( lpr_model->solve_lp_relax(false) )
     {
+        KStabModel *model = new KStabModel(instance);
+        LDDA *lagrangean = new LDDA(instance, model);
+
+        // trivial combinatorial bounds from min weight spanning tree and kstab
+        instance->run_mst();
+        model->solve(true);
+
         cout << "_____________________________________________________________________________" << endl << endl;
-        cout << "lp_bound = " << lpr_model->lp_bound
+
+        cout << "kstab bound: " << model->solution_weight
+             << " (runtime " << fixed << model->solution_runtime << ")" << endl;
+
+        cout << "mst bound: " << instance->get_mst_weight()
+             << " (runtime " << fixed << instance->get_mst_runtime() << ")" << endl;
+
+        cout << "lp bound: " << lpr_model->lp_bound
              << " (" << lpr_model->lp_passes << " passes,"
-             << " runtime: " << lpr_model->lp_runtime << ")" << endl;
+             << " runtime: " << fixed << lpr_model->lp_runtime << ")" << endl;
         cout << "_____________________________________________________________________________" << endl << endl;
 
         delete lpr_model;
 
         // Lagrangean Decomposition bound
-        KStabModel *model = new KStabModel(instance);
-        LDDA *lagrangean = new LDDA(instance, model);
-
         start_timer();
         lagrangean->dual_ascent(true);
         get_timer();
