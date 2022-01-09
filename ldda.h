@@ -27,6 +27,7 @@ public:
     bool problem_solved;
     bool iter_update;
     long iter;
+    double runtime;
 
     vector< vector<long> > multipliers_log;  // lambda[iteration][var_index]
     vector<long> bound_log;
@@ -54,6 +55,13 @@ private:
     vector<bool> contracted_edges_mask;
 
     stringstream full_log;
+
+    void inline start_timer();
+    double inline partial_time();
+    double inline total_time();
+    struct timeval* ldda_clock_start;
+    struct timeval* ldda_clock_partial;
+    struct timeval* ldda_clock_stop;
 };
 
 #endif

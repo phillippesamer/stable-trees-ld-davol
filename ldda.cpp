@@ -9,6 +9,11 @@ LDDA::LDDA(IO *instance, KStabModel *model)
     this->solution_pool = vector< pair<long, vector<bool> > >();
     this->full_log = stringstream();
 
+    this->runtime = -1;
+    this->ldda_clock_start = (struct timeval *) malloc(sizeof(struct timeval));
+    this->ldda_clock_partial = (struct timeval *) malloc(sizeof(struct timeval));
+    this->ldda_clock_stop = (struct timeval *) malloc(sizeof(struct timeval));
+
     this->contracted_edges_weight = 0;
     this->contracted_edges = vector<long>();
     this->contracted_edges_mask = vector<bool>(instance->graph->num_edges, false);
@@ -19,7 +24,7 @@ LDDA::LDDA(IO *instance, KStabModel *model)
     multipliers_log = vector< vector<long> >();
     multipliers_log.push_back( vector<long>(instance->graph->num_edges, 0) );
     for (long idx=0; idx < instance->graph->num_edges; ++idx)
-        multipliers_log[0][idx] = round(original_weights[idx] / 2);
+        multipliers_log[0][idx] = std::round(original_weights[idx] / 2);
 }
 
 LDDA::LDDA(IO *instance, KStabModel *model, vector<long> initial_multipliers)
@@ -30,6 +35,11 @@ LDDA::LDDA(IO *instance, KStabModel *model, vector<long> initial_multipliers)
     this->bound_log = vector<long>();
     this->solution_pool = vector< pair<long, vector<bool> > >();
     this->full_log = stringstream();
+
+    this->runtime = -1;
+    this->ldda_clock_start = (struct timeval *) malloc(sizeof(struct timeval));
+    this->ldda_clock_partial = (struct timeval *) malloc(sizeof(struct timeval));
+    this->ldda_clock_stop = (struct timeval *) malloc(sizeof(struct timeval));
 
     this->contracted_edges_weight = 0;
     this->contracted_edges = vector<long>();
@@ -51,6 +61,10 @@ LDDA::~LDDA()
     this->solution_pool.clear();
     this->contracted_edges.clear();
     this->contracted_edges_mask.clear();
+
+    free(ldda_clock_start);
+    free(ldda_clock_partial);
+    free(ldda_clock_stop);
 }
 
 bool LDDA::dual_ascent(bool steepest_ascent)
@@ -90,7 +104,10 @@ bool LDDA::dual_ascent(bool steepest_ascent)
     cout << setw(7) << "obs";
     cout << endl;
 
-    // 0. INITIALIZE WEIGHTS WITH LAGRANGEAN MULTIPLIERS
+    // procedure timer
+    this->start_timer();
+
+    // 0. INITIALIZE SUBPROBLEMS' WEIGHTS WITH LAGRANGEAN MULTIPLIERS
 
     // args: source1 begin, source1 end, source2 begin, dest begin, operator
     transform( instance->graph->w.begin(),
@@ -102,6 +119,7 @@ bool LDDA::dual_ascent(bool steepest_ascent)
     instance->graph->update_all_weights(instance->graph->w);
     model->update_all_weights(multipliers_log[0]);
 
+    // iterate while some direction admits a positive step size
     iter = 0;
     problem_solved = false;
 
@@ -116,16 +134,14 @@ bool LDDA::dual_ascent(bool steepest_ascent)
         bool feasible_kstab = false;
         stringstream feasible_kstab_msg;
 
-        struct timeval *clock_start = (struct timeval *) malloc(sizeof(struct timeval));
-        struct timeval *clock_stop  = (struct timeval *) malloc(sizeof(struct timeval));
-        gettimeofday(clock_start, 0);
-
         // 1. SOLVE MST(G, w-lambda^r)
 
         if (instance->graph->mst() == false)
         {
             cout << "Graph::mst() failed (graph is not connected)" << endl;
             cout << "infeasible problem instance" << endl;
+
+            this->runtime = total_time();
             return false;
         }
 
@@ -148,6 +164,8 @@ bool LDDA::dual_ascent(bool steepest_ascent)
         {
             cout << "KStabModel::solve() failed" << endl;
             cout << "infeasible problem instance" << endl;
+
+            this->runtime = total_time();
             return false;
         }
 
@@ -170,6 +188,7 @@ bool LDDA::dual_ascent(bool steepest_ascent)
                         cout << "UNEXPECTED ERROR: solutions differ in an "
                              << "index corresponding to a contracted edge"
                              << endl;
+                        this->runtime = total_time();
                         return false;
                     }
                 #endif
@@ -186,7 +205,7 @@ bool LDDA::dual_ascent(bool steepest_ascent)
 
             problem_solved = true;
 
-            // TO DO: any reason not to return here? e.g. logging?
+            this->runtime = total_time();
             return true;
         }
 
@@ -220,7 +239,7 @@ bool LDDA::dual_ascent(bool steepest_ascent)
 
                 problem_solved = true;
 
-                // TO DO: any reason not to return here? e.g. logging?
+                this->runtime = total_time();
                 return true;
             }
         }
@@ -256,7 +275,7 @@ bool LDDA::dual_ascent(bool steepest_ascent)
 
                 problem_solved = true;
 
-                // TO DO: any reason not to return here? e.g. logging?
+                this->runtime = total_time();
                 return true;
             }
         }
@@ -302,6 +321,7 @@ bool LDDA::dual_ascent(bool steepest_ascent)
                         cout << "x^" << iter << "_" << current_direction
                              << "  =  1  =  y^"  << iter << "_"
                              << current_direction << endl;
+                        this->runtime = total_time();
                         return false;
                     }
                 #endif
@@ -328,6 +348,7 @@ bool LDDA::dual_ascent(bool steepest_ascent)
                         cout << "probing var y[" << current_direction << "] = 1 failed" 
                         << " (runtime: " << model->runtime() << " s)" << endl;
 
+                        this->runtime = total_time();
                         return false;
                     }
                     else if (probing_kstab.first == AT_OPTIMUM)
@@ -351,6 +372,7 @@ bool LDDA::dual_ascent(bool steepest_ascent)
                             if (min(del,delta) < 0)
                             {
                                 cout << "UNEXPECTED ERROR: min( delta=" << delta << ", del=" << del <<" ) < 0" << endl;
+                                this->runtime = total_time();
                                 return false;
                             }
                             /*
@@ -391,6 +413,8 @@ bool LDDA::dual_ascent(bool steepest_ascent)
                         cout << "x^" << iter << "_" << current_direction
                              << "  =  0  =  y^"  << iter << "_"
                              << current_direction << endl;
+
+                        this->runtime = total_time();
                         return false;
                     }
                 #endif
@@ -405,6 +429,8 @@ bool LDDA::dual_ascent(bool steepest_ascent)
                     cout << "probing x^" << iter << "_" << current_direction
                          << "  =  1 (edge contraction) gave disconnected graph"
                          << endl;
+
+                    this->runtime = total_time();
                     return false;
                 }
 
@@ -424,6 +450,7 @@ bool LDDA::dual_ascent(bool steepest_ascent)
                     cout << "probing var y[" << current_direction << "] = 0 failed" 
                     << " (runtime: " << model->runtime() << " s)" << endl;
 
+                    this->runtime = total_time();
                     return false;
                 }
                 else if (probing_kstab.first == AT_OPTIMUM)
@@ -447,6 +474,7 @@ bool LDDA::dual_ascent(bool steepest_ascent)
                         if (min(del,delta) < 0)
                         {
                             cout << "UNEXPECTED ERROR: min( delta=" << delta << ", del=" << del <<" ) < 0" << endl;
+                            this->runtime = total_time();
                             return false;
                         }
                         /*
@@ -497,17 +525,12 @@ bool LDDA::dual_ascent(bool steepest_ascent)
                 next_multipliers[chosen_direction]);
         }
 
+        // iteration time
+        double iter_time = partial_time();
+
         // 7. SCREEN LOG
         stringstream logline;
         logline.precision(4);
-
-        // iteration time
-        gettimeofday(clock_stop, 0);
-        unsigned long clock_time = 1.e6 * (clock_stop->tv_sec - clock_start->tv_sec) +
-                                          (clock_stop->tv_usec - clock_start->tv_usec);
-        double iter_time = ((double)clock_time / (double)1.e6);
-        free(clock_start);
-        free(clock_stop);
 
         if (feasible_mst)
             logline << " * ";
@@ -559,7 +582,7 @@ bool LDDA::dual_ascent(bool steepest_ascent)
     }
     while (iter_update);
 
-    // no direction admits a positive step size - the procedure is over
+    this->runtime = total_time();
 
     return true;
 }
@@ -733,4 +756,36 @@ stringstream LDDA::create_log()
         log << "x[" << fixed_vars[i].first << "] = " << fixed_vars[i].second << endl;
 
     return log;
+}
+
+void LDDA::start_timer()
+{
+    gettimeofday(ldda_clock_start, 0);
+    gettimeofday(ldda_clock_partial, 0);  // initialization for the 1st call to partial_time()
+}
+
+double LDDA::partial_time()
+{
+    // returns the time elapsed since last call, and update partial timer
+    // (since the initialization, in the 1st execution)
+    struct timeval* tmp = (struct timeval *) malloc(sizeof(struct timeval));
+    gettimeofday(tmp, 0);
+
+    unsigned long clock_time = 1.e6 * (tmp->tv_sec - ldda_clock_partial->tv_sec) +
+                                      (tmp->tv_usec - ldda_clock_partial->tv_usec);
+
+    free(tmp);
+    gettimeofday(ldda_clock_partial, 0);
+
+    return (double) clock_time / (double)1.e6 ;
+}
+
+double LDDA::total_time()
+{
+    gettimeofday(ldda_clock_stop, 0);
+
+    unsigned long clock_time = 1.e6 * (ldda_clock_stop->tv_sec - ldda_clock_start->tv_sec) +
+                                      (ldda_clock_stop->tv_usec - ldda_clock_start->tv_usec);
+
+    return (double) clock_time / (double)1.e6 ;
 }

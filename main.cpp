@@ -15,32 +15,8 @@
 
 #include <cstdlib>
 #include <fstream>
-#include <sys/time.h>       // for 'gettimeofday()'
 
 using namespace std;
-
-static struct timeval *clock_start;
-
-void start_timer()
-{
-    // current clock time
-    clock_start = (struct timeval *) malloc(sizeof(struct timeval) );
-    gettimeofday(clock_start, 0);
-}
-
-void get_timer()
-{
-    struct timeval *clock_stop;
-    clock_stop = (struct timeval *) malloc( sizeof(struct timeval) );
-    gettimeofday(clock_stop, 0);
-
-    unsigned long clock_time = 1.e6 * (clock_stop->tv_sec - clock_start->tv_sec) +
-                                      (clock_stop->tv_usec - clock_start->tv_usec);
-
-    printf( "\nmain() says: runtime in seconds\n%.4f\n", ((double)clock_time / (double)1.e6) );
-
-    free(clock_stop);
-}
 
 int main(int argc, char **argv)
 {
@@ -88,9 +64,10 @@ int main(int argc, char **argv)
         delete lpr_model;
 
         // Lagrangean Decomposition bound
-        start_timer();
         lagrangean->dual_ascent(true);
-        get_timer();
+        cout << endl
+             << "ldda bound: " << lagrangean->bound_log.back()
+             << " (runtime " << fixed << lagrangean->runtime << ")" << endl;
 
         // write log file (input file name + "_ldda.log")
         stringstream log = lagrangean->create_log();
@@ -110,7 +87,6 @@ int main(int argc, char **argv)
         }
 
         // clean up
-        free(clock_start);
         delete lagrangean;
         delete model;
     }
