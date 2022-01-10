@@ -131,8 +131,13 @@ bool LDDA::dual_ascent(bool steepest_ascent)
         // information for screen log
         bool feasible_mst = false;
         stringstream feasible_mst_msg;
+
         bool feasible_kstab = false;
         stringstream feasible_kstab_msg;
+
+        // total time spent on solving the (mst/kstab) subproblems and probing 
+        double total_mst_time = 0;
+        double total_kstab_time = 0;
 
         // 1. SOLVE MST(G, w-lambda^r)
 
@@ -144,6 +149,8 @@ bool LDDA::dual_ascent(bool steepest_ascent)
             this->runtime = total_time();
             return false;
         }
+
+        total_mst_time += instance->graph->mst_runtime;
 
         /* For separation of concerns purposes, edges contracted by LDDA (in
          * the LEMON data structure only!) are missing in later spanning trees,
@@ -168,6 +175,8 @@ bool LDDA::dual_ascent(bool steepest_ascent)
             this->runtime = total_time();
             return false;
         }
+
+        total_kstab_time += model->model->get(GRB_DoubleAttr_Runtime);
 
         // now we can determine the lagrangean bound corresponding to the first multipliers
         if (iter == 1)
@@ -338,6 +347,8 @@ bool LDDA::dual_ascent(bool steepest_ascent)
                     #endif
                     */
 
+                    total_mst_time += instance->graph->probe_runtime;
+
                     // PROBING KSTAB FORCING e TO DETERMINE \delta^r_e
                     pair<ModelStatus,long> probing_kstab
                         = vertex_fix_bound(current_direction);
@@ -358,6 +369,8 @@ bool LDDA::dual_ascent(bool steepest_ascent)
                             cout << "kstab probing bound: " << probing_kstab.second << endl;
                         #endif
                         */
+
+                        total_kstab_time += model->model->get(GRB_DoubleAttr_Runtime);
 
                         // probings found feasible solutions => proceed to compute the bounds
 
@@ -440,6 +453,8 @@ bool LDDA::dual_ascent(bool steepest_ascent)
                 #endif
                 */
 
+                total_mst_time += instance->graph->probe_runtime;
+
                 // PROBING KSTAB WITHOUT e TO DETERMINE \delta^r_e
                 pair<ModelStatus,long> probing_kstab
                     = vertex_deletion_bound(current_direction);
@@ -460,6 +475,8 @@ bool LDDA::dual_ascent(bool steepest_ascent)
                         cout << "kstab probing bound: " << probing_kstab.second << endl;
                     #endif
                     */
+
+                    total_kstab_time += model->model->get(GRB_DoubleAttr_Runtime);
 
                     // probings found feasible solutions => proceed to compute the bounds
 
@@ -556,9 +573,9 @@ bool LDDA::dual_ascent(bool steepest_ascent)
             logline << " " << setw(9) << "-";
         }
         logline << " " << setw(11) << instance->graph->mst_weight;
-        logline << " " << fixed << setw(10) << instance->graph->mst_runtime;
+        logline << " " << fixed << setw(10) << total_mst_time;     // subproblem only? instance->graph->mst_runtime
         logline << " " << setw(9) << model->solution_weight;
-        logline << " " << fixed << setw(11) << model->solution_runtime;
+        logline << " " << fixed << setw(11) << total_kstab_time;   // subproblem only? model->solution_runtime;
         logline << " " << fixed << setw(12) << iter_time;
         logline << " " << setw(9) << fixed_vars.size();
 

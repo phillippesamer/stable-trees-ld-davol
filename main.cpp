@@ -48,6 +48,9 @@ int main(int argc, char **argv)
         instance->run_mst();
         model->solve(true);
 
+        // TO DO: remove this (temporary output for experiments)
+        stringstream table_row;
+
         cout << "_____________________________________________________________________________" << endl << endl;
 
         cout << "kstab bound: " << model->solution_weight
@@ -61,10 +64,32 @@ int main(int argc, char **argv)
              << " runtime: " << fixed << lpr_model->lp_runtime << ")" << endl;
         cout << "_____________________________________________________________________________" << endl << endl;
 
+        // TO DO: remove this (temporary output for experiments)
+        table_row << left;
+        table_row << setw(50) << argv[1];
+        table_row << setw(5) << "  &  ";
+        table_row << setw(10) << model->solution_weight;
+        table_row << setw(5) << "  &  ";
+        table_row << setw(10) << fixed << model->solution_runtime;
+        table_row << setw(5) << "  &  ";
+        table_row << setw(10) << instance->get_mst_weight();
+        table_row << setw(5) << "  &  ";
+        table_row << setw(10) << fixed << instance->get_mst_runtime();
+        table_row << setw(5) << "  &  ";
+        table_row << setw(10) << lpr_model->lp_bound;
+        table_row << setw(5) << "  &  ";
+        table_row << setw(10) << fixed << lpr_model->lp_runtime;
+        table_row << setw(5) << "  &  ";
+
         delete lpr_model;
 
         // Lagrangean Decomposition bound
-        lagrangean->dual_ascent(true);
+        if ( lagrangean->dual_ascent(false) == false)
+        {
+            // TO DO: remove this (temporary for experiments)
+            lagrangean->bound_log.push_back(numeric_limits<long>::min());
+        }
+
         cout << endl
              << "ldda bound: " << lagrangean->bound_log.back()
              << " (runtime " << fixed << lagrangean->runtime << ")" << endl;
@@ -84,6 +109,24 @@ int main(int argc, char **argv)
         {
             cout << log.str();
             cout << "ERROR: unable to write log file; dumped to screen" << endl;
+        }
+
+        // TO DO: remove this (temporary output for experiments)
+        table_row << setw(10) << lagrangean->bound_log.back();
+        table_row << setw(5) << "  &  ";
+        table_row << setw(10) << fixed << lagrangean->runtime;
+        table_row << setw(5) << endl;
+
+        ofstream xpfile("xp1table.dat", ofstream::app);
+        if (xpfile.is_open())
+        {
+            xpfile << table_row.str();
+            xpfile.close();
+        }
+        else
+        {
+            cout << "ERROR: unable to write dat file; dumping to screen:" << endl;
+            cout << table_row.str();
         }
 
         // clean up

@@ -53,6 +53,7 @@ public:
     double mst_runtime;
 
     pair<bool,long> mst_probing_var(long, bool);
+    double probe_runtime;
 
 private:
     friend class IO;

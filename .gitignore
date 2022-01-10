@@ -2,3 +2,5 @@ ldda
 *.sol
 *.lp
 *.log
+*_xp1.out
+

@@ -175,7 +175,7 @@ bool Graph::mst()
     }
 
     mst_timer.halt();
-    this->mst_runtime = mst_timer.realTime();    
+    this->mst_runtime = mst_timer.realTime();
 
     #ifdef DEBUG_MST
         cout << "MST weight = " << this->mst_weight << endl;
@@ -231,7 +231,8 @@ pair<bool,long> Graph::mst_probing_var(long probe_idx, bool probe_value)
 
     vector<ListGraph::Edge> mst_edges;
     long mst_weight;
-    Timer mst_timer;
+    Timer probing_timer;
+    probing_timer.start();
 
     long vertex_1 = this->s[probe_idx];
     long vertex_2 = this->t[probe_idx];
@@ -290,9 +291,7 @@ pair<bool,long> Graph::mst_probing_var(long probe_idx, bool probe_value)
         #endif
 
         // 1.3 RUN MST
-        mst_timer.start();
         mst_weight = kruskal(graph_copy, weights_copy, back_inserter(mst_edges));
-        mst_timer.halt();
     }
 
     // Case 2: probing MST without the edge
@@ -304,9 +303,7 @@ pair<bool,long> Graph::mst_probing_var(long probe_idx, bool probe_value)
         lemon_graph->erase(this->lemon_edges[probe_idx]);
 
         // 2.2 RUN MST
-        mst_timer.start();
         mst_weight = kruskal(*this->lemon_graph, *this->lemon_weight, back_inserter(mst_edges));
-        mst_timer.halt();
 
         // 2.3 REINSERT EDGE
         ListGraph::Edge e = this->lemon_graph->addEdge(this->lemon_vertices[vertex_1], this->lemon_vertices[vertex_2]);
@@ -347,6 +344,10 @@ pair<bool,long> Graph::mst_probing_var(long probe_idx, bool probe_value)
             cout << "mst_weight = " << (*lemon_weight)[e_it] << endl;
         }
     #endif
+
+    // runtime saved on the object, for eventual use later on
+    probing_timer.halt();
+    this->probe_runtime = probing_timer.realTime();
 
     return make_pair(result_is_tree, result_weight);
 }
