@@ -107,21 +107,23 @@ int KStabModel::solve(bool logging)
             model->set(GRB_IntParam_OutputFlag, 0);
 
         model->optimize();
+        this->solution_runtime = model->get(GRB_DoubleAttr_Runtime);
 
         // store results in this object
         if (model->get(GRB_IntAttr_Status) == GRB_OPTIMAL)
         {
             this->solution_status = AT_OPTIMUM;
-            this->solution_runtime = model->get(GRB_DoubleAttr_Runtime);
             this->solution_vector.clear();
 
-            // the weights are integral, so the optimal value should also be
+            // the weights are integral, so the optimal value must also be
             double optval = model->get(GRB_DoubleAttr_ObjVal);
             this->solution_weight = (long) optval;
             if (floor(optval) - optval != 0)
             {
-                this->solution_status = STATUS_UNKNOWN;
-                cout << "Unexpected error: optimal value is " << optval << " (not integral!)" << endl << endl;
+                this->solution_weight = std::floor(optval + ZERO_TOL);
+                cout << "NB: model optimal value is " << optval
+                     << " (not integral!); rounded to " << solution_weight
+                     << endl;
             }
 
             // save bool vector of this solution
@@ -137,7 +139,7 @@ int KStabModel::solve(bool logging)
                 // NB: gurobi vars are floating point numbers, allowing +0 and -0!
                 // The vector<bool> below is safer and easier to use
 
-                if (this->x[i].get(GRB_DoubleAttr_X) > EPSILON_TOL)
+                if (this->x[i].get(GRB_DoubleAttr_X) > ZERO_TOL)
                     this->solution_vector.push_back(true);
                 else
                     this->solution_vector.push_back(false);
@@ -155,7 +157,6 @@ int KStabModel::solve(bool logging)
         else if (model->get(GRB_IntAttr_Status) == GRB_INFEASIBLE)
         {
             this->solution_status = IS_INFEASIBLE;
-            this->solution_runtime = model->get(GRB_DoubleAttr_Runtime);
 
             this->solution_weight = numeric_limits<long>::max();
             this->solution_vector.clear();
@@ -170,7 +171,6 @@ int KStabModel::solve(bool logging)
         else
         {
             this->solution_status = STATUS_UNKNOWN;
-            this->solution_runtime = model->get(GRB_DoubleAttr_Runtime);
             this->solution_vector.clear();
 
             cout << "Unexpected error: solve() got neither optimal nor infeasible model" << endl;
@@ -244,14 +244,16 @@ pair<ModelStatus,long> KStabModel::probe_var(long probe_idx, bool probe_value)
     {
         status = AT_OPTIMUM;
 
-        // the weights are integral, so the optimal value should also be
+        // the weights are integral, so the optimal value must also be
         double optval = model->get(GRB_DoubleAttr_ObjVal);
         result = (long) optval;
         if (floor(optval) - optval != 0)
         {
-            status = STATUS_UNKNOWN;
-            cout << "Unexpected error: probe_var(idx=" << probe_idx << ", value=" << probe_value << ") ";
-            cout << "got optimal value " << optval << " (not integral!)" << endl << endl;
+            result = std::floor(optval + ZERO_TOL);
+
+            cout << "NB: probe_var(idx=" << probe_idx << ", value=" << probe_value << ") ";
+            cout << "got optimal value " << optval << " (not integral!); rounded to "
+                 << result << endl;
         }
     }
     else if (model->get(GRB_IntAttr_Status) == GRB_INFEASIBLE)

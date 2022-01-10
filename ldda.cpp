@@ -1,5 +1,11 @@
 #include "ldda.h"
 
+// algorithm setup switches
+bool USE_LDDA_TIME_LIMIT = true;
+double LDDA_TIME_LIMIT = 3600;
+bool SUBPROBLEM_TIMES_WITHOUT_PROBING = true;  // log information
+double TIME_LOG_INTERVAL = 300;
+
 LDDA::LDDA(IO *instance, KStabModel *model)
 {
     this->instance = instance;
@@ -106,6 +112,7 @@ bool LDDA::dual_ascent(bool steepest_ascent)
 
     // procedure timer
     this->start_timer();
+    double previous_time_stamp = 0;
 
     // 0. INITIALIZE SUBPROBLEMS' WEIGHTS WITH LAGRANGEAN MULTIPLIERS
 
@@ -122,6 +129,7 @@ bool LDDA::dual_ascent(bool steepest_ascent)
     // iterate while some direction admits a positive step size
     iter = 0;
     problem_solved = false;
+    time_limit_exceeded = false;
 
     do
     {
@@ -176,7 +184,7 @@ bool LDDA::dual_ascent(bool steepest_ascent)
             return false;
         }
 
-        total_kstab_time += model->model->get(GRB_DoubleAttr_Runtime);
+        total_kstab_time += model->runtime();
 
         // now we can determine the lagrangean bound corresponding to the first multipliers
         if (iter == 1)
@@ -310,7 +318,9 @@ bool LDDA::dual_ascent(bool steepest_ascent)
 
         bool done_with_first_ascent = false;
 
-        while ( !done_with_first_ascent && attempt < mismatch.size() )
+        while ( !done_with_first_ascent     && 
+                attempt < mismatch.size()   &&
+                !time_limit_exceeded        )
         {
             long current_direction = mismatch[attempting_idx];
 
@@ -370,7 +380,7 @@ bool LDDA::dual_ascent(bool steepest_ascent)
                         #endif
                         */
 
-                        total_kstab_time += model->model->get(GRB_DoubleAttr_Runtime);
+                        total_kstab_time += model->runtime();
 
                         // probings found feasible solutions => proceed to compute the bounds
 
@@ -476,7 +486,7 @@ bool LDDA::dual_ascent(bool steepest_ascent)
                     #endif
                     */
 
-                    total_kstab_time += model->model->get(GRB_DoubleAttr_Runtime);
+                    total_kstab_time += model->runtime();
 
                     // probings found feasible solutions => proceed to compute the bounds
 
@@ -519,6 +529,9 @@ bool LDDA::dual_ascent(bool steepest_ascent)
 
             attempting_idx = (attempting_idx+1) % mismatch.size();
             ++attempt;
+
+            if (USE_LDDA_TIME_LIMIT && total_time() > LDDA_TIME_LIMIT)
+                time_limit_exceeded = true;
         }
 
         // 6. UPDATE MULTIPLIER \lambda^{r+1}_e, COPY THE OTHERS
@@ -573,9 +586,19 @@ bool LDDA::dual_ascent(bool steepest_ascent)
             logline << " " << setw(9) << "-";
         }
         logline << " " << setw(11) << instance->graph->mst_weight;
-        logline << " " << fixed << setw(10) << total_mst_time;     // subproblem only? instance->graph->mst_runtime
+
+        if (SUBPROBLEM_TIMES_WITHOUT_PROBING)
+            logline << " " << fixed << setw(10) << instance->graph->mst_runtime;
+        else
+            logline << " " << fixed << setw(10) << total_mst_time;
+
         logline << " " << setw(9) << model->solution_weight;
-        logline << " " << fixed << setw(11) << total_kstab_time;   // subproblem only? model->solution_runtime;
+
+        if (SUBPROBLEM_TIMES_WITHOUT_PROBING)
+            logline << " " << fixed << setw(11) << model->solution_runtime;
+        else
+            logline << " " << fixed << setw(11) << total_kstab_time;
+
         logline << " " << fixed << setw(12) << iter_time;
         logline << " " << setw(9) << fixed_vars.size();
 
@@ -594,10 +617,23 @@ bool LDDA::dual_ascent(bool steepest_ascent)
         if (feasible_kstab)
             logline << feasible_kstab_msg.str();
 
+        if (time_limit_exceeded)
+            logline << " time limit exceeded";
+        else
+        {
+            // log total time at set intervals
+            double current_elapsed_time = total_time();
+            if (current_elapsed_time >= previous_time_stamp + TIME_LOG_INTERVAL)
+            {
+                logline << " ldda total time: " << current_elapsed_time;
+                previous_time_stamp = current_elapsed_time;
+            }
+        }
+
         cout << logline.str() << endl;      // screen log
         full_log << logline.str() << endl;  // full log, dumped when create_log() is called
     }
-    while (iter_update);
+    while (iter_update && !time_limit_exceeded);
 
     this->runtime = total_time();
 

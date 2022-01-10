@@ -26,6 +26,7 @@ public:
     bool dual_ascent(bool);
     bool problem_solved;
     bool iter_update;
+    bool time_limit_exceeded;
     long iter;
     double runtime;
 
