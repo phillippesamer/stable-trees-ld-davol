@@ -37,11 +37,13 @@ public:
     
     int solve(bool);
     long solution_weight;
+    long solution_dualbound;
     vector<bool> solution_vector;
     ModelStatus solution_status;
     double solution_runtime;
 
     double runtime();
+    void set_time_limit(double);
 
     void update_single_weight(long,long);
     void update_all_weights(vector<long>);

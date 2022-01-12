@@ -18,6 +18,15 @@
 
 using namespace std;
 
+// execution switches
+double RUN_KSTAB_WITH_TIME_LIMIT = 3600;
+
+bool RUN_STEEPEST_ASCENT_LDDA = false;
+bool WRITE_LDDA_LOG_FILE = true;
+
+bool APPEND_SUMMARY_TO_DAT_FILE = true;
+string SUMMARY_FILE_NAME = string("xp1table.dat");
+
 int main(int argc, char **argv)
 {
     if (argc != 2)
@@ -41,100 +50,134 @@ int main(int argc, char **argv)
 
     if ( lpr_model->solve_lp_relax(false) )
     {
-        KStabModel *model = new KStabModel(instance);
-        LDDA *lagrangean = new LDDA(instance, model);
-
         // trivial combinatorial bounds from min weight spanning tree and kstab
         instance->run_mst();
-        model->solve(true);
 
-        // TO DO: remove this (temporary output for experiments)
-        stringstream table_row;
+        KStabModel *model = new KStabModel(instance);
+        model->set_time_limit(RUN_KSTAB_WITH_TIME_LIMIT);
+        model->solve(true);
 
         cout << "_____________________________________________________________________________" << endl << endl;
 
-        cout << "kstab bound: " << model->solution_weight
-             << " (runtime " << fixed << model->solution_runtime << ")" << endl;
+        cout << "kstab bound: " << model->solution_dualbound
+             << " (runtime " << fixed << model->solution_runtime << ")";
+        if (model->solution_status != AT_OPTIMUM)
+            cout << " *** NOT OPTIMAL ***";
+        cout << endl;
 
         cout << "mst bound: " << instance->get_mst_weight()
              << " (runtime " << fixed << instance->get_mst_runtime() << ")" << endl;
 
         cout << "lp bound: " << lpr_model->lp_bound
              << " (" << lpr_model->lp_passes << " passes,"
-             << " runtime: " << fixed << lpr_model->lp_runtime << ")" << endl;
+             << " runtime " << fixed << lpr_model->lp_runtime << ")" << endl;
         cout << "_____________________________________________________________________________" << endl << endl;
 
-        // TO DO: remove this (temporary output for experiments)
-        table_row << left;
-        table_row << setw(50) << argv[1];
-        table_row << setw(5) << "  &  ";
-        table_row << setw(10) << model->solution_weight;
-        table_row << setw(5) << "  &  ";
-        table_row << setw(10) << fixed << model->solution_runtime;
-        table_row << setw(5) << "  &  ";
-        table_row << setw(10) << instance->get_mst_weight();
-        table_row << setw(5) << "  &  ";
-        table_row << setw(10) << fixed << instance->get_mst_runtime();
-        table_row << setw(5) << "  &  ";
-        table_row << setw(10) << lpr_model->lp_bound;
-        table_row << setw(5) << "  &  ";
-        table_row << setw(10) << fixed << lpr_model->lp_runtime;
-        table_row << setw(5) << "  &  ";
+        // summary output file (for experiments with many instances)
+        stringstream table_row;
+        if (APPEND_SUMMARY_TO_DAT_FILE)
+        {
+            table_row << left;
+            table_row << setw(50) << argv[1];
+            table_row << setw(5) << "  &  ";
+            if (model->solution_status == AT_OPTIMUM)
+                table_row << setw(10) << model->solution_weight;
+            else
+                table_row << setw(10) << model->solution_weight << " ?";
+            table_row << setw(5) << "  &  ";
+            table_row << setw(10) << fixed << model->solution_runtime;
+            table_row << setw(5) << "  &  ";
+            table_row << setw(10) << instance->get_mst_weight();
+            table_row << setw(5) << "  &  ";
+            table_row << setw(10) << fixed << instance->get_mst_runtime();
+            table_row << setw(5) << "  &  ";
+            table_row << setw(10) << lpr_model->lp_bound;
+            table_row << setw(5) << "  &  ";
+            table_row << setw(10) << fixed << lpr_model->lp_runtime;
+            table_row << setw(5) << "  &  ";
+        }
 
         delete lpr_model;
 
-        // Lagrangean Decomposition bound
-        if ( lagrangean->dual_ascent(false) == false)
+        if (model->solution_status == AT_OPTIMUM)
         {
-            // TO DO: remove this (temporary for experiments)
-            lagrangean->bound_log.push_back(numeric_limits<long>::min());
-        }
+            // Lagrangean Decomposition bound
+            LDDA *lagrangean = new LDDA(instance, model);
+            bool ldda_complete = lagrangean->dual_ascent(RUN_STEEPEST_ASCENT_LDDA);
 
-        cout << endl
-             << "ldda bound: " << lagrangean->bound_log.back()
-             << " (runtime " << fixed << lagrangean->runtime << ")" << endl;
+            cout << endl << "ldda bound: ";
+            if ( ldda_complete)
+                cout << lagrangean->bound_log.back();
+            else
+                cout << " - ";
+            cout << " (runtime " << fixed << lagrangean->runtime << ")" << endl;
 
-        // write log file (input file name + "_ldda.log")
-        stringstream log = lagrangean->create_log();
+            if (WRITE_LDDA_LOG_FILE)
+            {
+                // write LDDA log file (input file name + "_ldda.log")
+                stringstream log = lagrangean->create_log();
 
-        char buffer[200];
-        int cx = snprintf(buffer, 200, "%s_ldda.log", argv[1]);
-        ofstream logfile(buffer);
-        if (cx>=0 && cx<200 && logfile.is_open())
-        {
-            logfile << log.str();
-            logfile.close();
+                char buffer[200];
+                int cx = snprintf(buffer, 200, "%s_ldda.log", argv[1]);
+                ofstream logfile(buffer);
+                if (cx>=0 && cx<200 && logfile.is_open())
+                {
+                    logfile << log.str();
+                    logfile.close();
+                }
+                else
+                {
+                    cout << log.str();
+                    cout << "ERROR: unable to write log file; dumped to screen" << endl;
+                }
+            }
+
+            if (APPEND_SUMMARY_TO_DAT_FILE)
+            {
+                if (ldda_complete)
+                    table_row << setw(10) << lagrangean->bound_log.back();
+                else
+                    table_row << setw(10) << " - ";
+                table_row << setw(5) << "  &  ";
+                table_row << setw(10) << fixed << lagrangean->runtime;
+                table_row << setw(5) << endl;
+            }
+
+            delete lagrangean;
         }
         else
         {
-            cout << log.str();
-            cout << "ERROR: unable to write log file; dumped to screen" << endl;
+            // kstab model could not be solved to optimality within time limit
+
+            if (APPEND_SUMMARY_TO_DAT_FILE)
+            {
+                table_row << setw(10) << " - ";
+                table_row << setw(5) << "  &  ";
+                table_row << setw(10) << " - ";
+                table_row << setw(5) << endl;
+            }
         }
 
-        // TO DO: remove this (temporary output for experiments)
-        table_row << setw(10) << lagrangean->bound_log.back();
-        table_row << setw(5) << "  &  ";
-        table_row << setw(10) << fixed << lagrangean->runtime;
-        table_row << setw(5) << endl;
-
-        ofstream xpfile("xp1table.dat", ofstream::app);
-        if (xpfile.is_open())
+        if (APPEND_SUMMARY_TO_DAT_FILE)
         {
-            xpfile << table_row.str();
-            xpfile.close();
-        }
-        else
-        {
-            cout << "ERROR: unable to write dat file; dumping to screen:" << endl;
-            cout << table_row.str();
+            ofstream xpfile(SUMMARY_FILE_NAME.c_str(), ofstream::app);
+            if (xpfile.is_open())
+            {
+                xpfile << table_row.str();
+                xpfile.close();
+            }
+            else
+            {
+                cout << "ERROR: unable to write dat file; dumping to screen:" << endl;
+                cout << table_row.str();
+            }
         }
 
-        // clean up
-        delete lagrangean;
         delete model;
     }
     else
     {
+        // LP relaxation infeasible
         delete lpr_model;
     }
 

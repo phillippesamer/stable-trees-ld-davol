@@ -89,7 +89,23 @@ zhang_type1=(
 "input/zhang-instances/z300-1000-14985.gcc" 
 )
 
-for entry in "${zhang_type1[@]}";
+zhang_type1_missing=( 
+"input/zhang-instances/z100-500-6237.gcc" 
+"input/zhang-instances/z100-500-12474.gcc" 
+"input/zhang-instances/z200-600-1797.gcc" 
+"input/zhang-instances/z200-600-3594.gcc" 
+"input/zhang-instances/z200-600-5391.gcc" 
+"input/zhang-instances/z200-800-3196.gcc" 
+"input/zhang-instances/z200-800-6392.gcc" 
+"input/zhang-instances/z200-800-9588.gcc" 
+"input/zhang-instances/z200-800-15980.gcc" 
+"input/zhang-instances/z300-800-3196.gcc" 
+"input/zhang-instances/z300-1000-4995.gcc" 
+"input/zhang-instances/z300-1000-9990.gcc" 
+"input/zhang-instances/z300-1000-14985.gcc" 
+)
+
+for entry in "${zhang_type1_missing[@]}";
 do
     echo "$entry"
     #output=$(./ldda $entry | tail -n 1 >> "lp-new.out")

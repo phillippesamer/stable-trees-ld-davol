@@ -91,15 +91,15 @@ int KStabModel::solve(bool logging)
     try
     {
         // turn off all gurobi cut generators
-        //env->set(GRB_IntParam_Cuts, 0);
+        //model->set(GRB_IntParam_Cuts, 0);
 
         // turn off gurobi presolve and heuristics
-        //env->set(GRB_IntParam_Presolve, 0);
-        //env->set(GRB_IntParam_PrePasses, 0);
-        //env->set(GRB_DoubleParam_Heuristics, 0);
+        //model->set(GRB_IntParam_Presolve, 0);
+        //model->set(GRB_IntParam_PrePasses, 0);
+        //model->set(GRB_DoubleParam_Heuristics, 0);
 
         // need to disable presolve reductions that affect user cuts
-        //env->set(GRB_IntParam_PreCrush, 1);
+        //model->set(GRB_IntParam_PreCrush, 1);
 
         if (logging == true)
             model->set(GRB_IntParam_OutputFlag, 1);
@@ -118,9 +118,11 @@ int KStabModel::solve(bool logging)
             // the weights are integral, so the optimal value must also be
             double optval = model->get(GRB_DoubleAttr_ObjVal);
             this->solution_weight = (long) optval;
+            this->solution_dualbound = (long) optval;
             if (floor(optval) - optval != 0)
             {
                 this->solution_weight = std::floor(optval + ZERO_TOL);
+                this->solution_dualbound = std::floor(optval + ZERO_TOL);
                 cout << "NB: model optimal value is " << optval
                      << " (not integral!); rounded to " << solution_weight
                      << endl;
@@ -159,12 +161,26 @@ int KStabModel::solve(bool logging)
             this->solution_status = IS_INFEASIBLE;
 
             this->solution_weight = numeric_limits<long>::max();
+            this->solution_dualbound = numeric_limits<long>::max();
             this->solution_vector.clear();
 
-            #ifdef DEBUG
-                cout << "Model infeasible!" << endl;
-                cout << "Model runtime: " << solution_runtime << endl;
-            #endif
+            cout << "Model infeasible! (runtime "
+                 << solution_runtime << ")" << endl;
+
+            return 0;
+        }
+        else if (model->get(GRB_IntAttr_Status) == GRB_TIME_LIMIT)
+        {
+            this->solution_status = STATUS_UNKNOWN;
+
+            this->solution_weight = model->get(GRB_DoubleAttr_ObjVal);
+            this->solution_dualbound = model->get(GRB_DoubleAttr_ObjBound);
+
+            cout << "Time limit exceeded (" << solution_runtime << ")" << endl;
+            cout << "Dual bound " << model->get(GRB_DoubleAttr_ObjBound) 
+                 << ", primal bound " << model->get(GRB_DoubleAttr_ObjVal) 
+                 << " (MIP gap " << model->get(GRB_DoubleAttr_MIPGap) << "%)" 
+                 << endl;
 
             return 0;
         }
@@ -189,6 +205,12 @@ int KStabModel::solve(bool logging)
 double KStabModel::runtime()
 {
     return model->get(GRB_DoubleAttr_Runtime);
+}
+
+
+void KStabModel::set_time_limit(double tl)
+{
+    model->set(GRB_DoubleParam_TimeLimit, tl);
 }
 
 void KStabModel::update_single_weight(long idx, long new_weight)
