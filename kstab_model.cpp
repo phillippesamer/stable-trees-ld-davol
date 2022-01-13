@@ -5,6 +5,11 @@ KStabModel::KStabModel(IO *instance)
     this->instance = instance;
     this->fixed_cardinality = instance->graph->num_vertices-1;
 
+    this->solution_weight = numeric_limits<long>::max();
+    this->solution_dualbound = numeric_limits<long>::max();
+    this->solution_status = STATUS_UNKNOWN;
+    this->solution_runtime = -1;
+
     try
     {
         this->env = new GRBEnv();
@@ -173,12 +178,14 @@ int KStabModel::solve(bool logging)
         {
             this->solution_status = STATUS_UNKNOWN;
 
-            this->solution_weight = model->get(GRB_DoubleAttr_ObjVal);
+            this->solution_weight = (model->get(GRB_IntAttr_SolCount) > 0) ?
+                                    model->get(GRB_DoubleAttr_ObjVal) :
+                                    numeric_limits<long>::max();
             this->solution_dualbound = model->get(GRB_DoubleAttr_ObjBound);
 
             cout << "Time limit exceeded (" << solution_runtime << ")" << endl;
-            cout << "Dual bound " << model->get(GRB_DoubleAttr_ObjBound) 
-                 << ", primal bound " << model->get(GRB_DoubleAttr_ObjVal) 
+            cout << "Dual bound " << this->solution_dualbound 
+                 << ", primal bound " << this->solution_weight 
                  << " (MIP gap " << model->get(GRB_DoubleAttr_MIPGap) << "%)" 
                  << endl;
 

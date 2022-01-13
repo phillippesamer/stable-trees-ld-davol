@@ -82,8 +82,14 @@ int main(int argc, char **argv)
             table_row << setw(5) << "  &  ";
             if (model->solution_status == AT_OPTIMUM)
                 table_row << setw(10) << model->solution_weight;
+            else if (model->solution_status == IS_INFEASIBLE)
+                table_row << setw(10) << "x";
             else
-                table_row << setw(10) << model->solution_weight << " ?";
+            {
+                stringstream tmp_str;
+                tmp_str << model->solution_weight << " ?";
+                table_row << setw(10) << tmp_str.str();
+            }
             table_row << setw(5) << "  &  ";
             table_row << setw(10) << fixed << model->solution_runtime;
             table_row << setw(5) << "  &  ";
