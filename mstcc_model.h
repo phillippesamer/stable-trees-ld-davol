@@ -23,7 +23,7 @@ using namespace lemon::concepts;
 #include "kstab_model.h"
 
 #define SEC_VIOLATION_TOL 0.0001
-#define SEC_SEPARATION_PRECISION 10
+#define SEC_SEPARATION_PRECISION 14   // <= 14 without changing everything to long double
 
 /***
  * \file mstcc_model.h
