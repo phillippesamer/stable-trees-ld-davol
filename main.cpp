@@ -88,7 +88,7 @@ int main(int argc, char **argv)
             {
                 stringstream tmp_str;
                 tmp_str << model->solution_weight << " ?";
-                table_row << setw(10) << tmp_str.str();
+                table_row << setw(25) << tmp_str.str();
             }
             table_row << setw(5) << "  &  ";
             table_row << setw(10) << fixed << model->solution_runtime;
