@@ -81,9 +81,9 @@ int main(int argc, char **argv)
             table_row << setw(50) << argv[1];
             table_row << setw(5) << "  &  ";
             if (model->solution_status == AT_OPTIMUM)
-                table_row << setw(10) << model->solution_weight;
+                table_row << setw(25) << model->solution_weight;
             else if (model->solution_status == IS_INFEASIBLE)
-                table_row << setw(10) << "x";
+                table_row << setw(25) << "x";
             else
             {
                 stringstream tmp_str;
