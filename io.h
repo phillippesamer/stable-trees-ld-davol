@@ -28,7 +28,7 @@ public:
     IO();
     virtual ~IO();
     
-    bool parse_gcclib(const char *);
+    bool parse_input_file(string);
 
     bool run_mst() { return graph->mst(); }
     long get_mst_weight() { return graph->mst_weight; }

@@ -25,7 +25,7 @@ bool RUN_STEEPEST_ASCENT_LDDA = false;
 bool WRITE_LDDA_LOG_FILE = true;
 
 bool APPEND_SUMMARY_TO_DAT_FILE = true;
-string SUMMARY_FILE_NAME = string("xp1table.dat");
+string SUMMARY_FILE_NAME = string("xp3table.dat");
 
 int main(int argc, char **argv)
 {
@@ -38,7 +38,7 @@ int main(int argc, char **argv)
     IO* instance = new IO();
     
     // parse given input file and look for errors in it
-    if (instance->parse_gcclib(argv[1]) == false)
+    if (instance->parse_input_file(string(argv[1])) == false)
     {
         cout << "unable to parse input file" << endl;
         delete instance;

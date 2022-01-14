@@ -2,7 +2,7 @@
 
 IO::IO()
 {
-    // only for consistency (if IO is used without calling parse_gcclib)
+    // only for consistency (if IO is used without calling parse_input_file)
     this->graph = new Graph();
 
     this->num_conflicts = 0;
@@ -15,24 +15,33 @@ IO::~IO()
     conflict_graph_adj_list.clear();
 }
 
-// parse GCCLib instance file
-bool IO::parse_gcclib(const char *filename)
+// parse instance file
+bool IO::parse_input_file(string filename)
 {
+    // check if this is an instance in the original benchmark (gcc extension)
+    size_t dot_pos = filename.find_last_of(".");
+    bool gcc_format = filename.find("gcc", dot_pos+1) != string::npos;
+
     ifstream input_fh(filename);
     
     if (input_fh.is_open())
     {
-        string line;
-        
-        // skip comment lines
-        do
+        // in gcc files, the first lines might have comments, followed by an instance id
+        if (gcc_format)
         {
-            getline(input_fh, line);
+            string line;
+            
+            // skip comment lines
+            do
+            {
+                getline(input_fh, line);
+            }
+            while(line.find("#") != string::npos);   // there is a trail
+
+            instance_id.assign(line);
         }
-        while(line.find("#") != string::npos);   // there is a trail
-        
-        // 1st line: instance id
-        instance_id.assign(line);
+        else
+            instance_id.assign(filename);
         
         // 3 lines for cardinalities of vertex, edge and conflict sets
         long num_vertices, num_edges;
@@ -88,9 +97,16 @@ bool IO::parse_gcclib(const char *filename)
             (*graph->lemon_weight)[e] = w;
             (*graph->lemon_edges_inverted_index)[e] = line_idx;
         }
-        
+
+        /* original instances (gcc format) include a single line per conflict,
+         * but carrabs instances (cms format) include two lines for each (both
+         * e1 e2 and e2 e1)
+         */
+
+        long conflict_lines_to_read = gcc_format ? num_conflicts : 2*num_conflicts;
+
         // p lines for conflicting edge pairs in the instance
-        for (long line_idx=0; line_idx<num_conflicts; ++line_idx)
+        for (long line_idx=0; line_idx<conflict_lines_to_read; ++line_idx)
         {
             /* read terminal nodes from each edge in the pair:
              * a b c d (incidentally, a<b and c<d)
@@ -111,29 +127,31 @@ bool IO::parse_gcclib(const char *filename)
                 return false;
             }
             
-            // store conflict
-            pair<long,long> edges = (a<c) ? make_pair(e1_index, e2_index) : make_pair(e2_index, e1_index);
-            
-            // should never happen
-            for (unsigned k=0; k<conflicts.size(); ++k)
+            bool repeated = false;
+            list<long>::iterator neighbour_it = this->conflict_graph_adj_list[e1_index].begin();
+            while ( !repeated && neighbour_it != this->conflict_graph_adj_list[e1_index].end() )
             {
-                pair<long, long> cur = conflicts[k];
-                if (cur.first == edges.first || cur.first == edges.second)
-                {
-                    if (cur.second == edges.first || cur.second == edges.second)
-                    {
-                        cerr << "ERROR: repeated conflict in input file line " << line_idx << endl << endl;
-                        return false;
-                    }
-                }
-            }
-            
-            this->conflicts.push_back(edges);
+                if (*neighbour_it == e2_index)
+                    repeated = true;
 
-            // update adjacency lists
-            this->conflict_graph_adj_list[e1_index].push_back(e2_index);
-            this->conflict_graph_adj_list[e2_index].push_back(e1_index);
+                ++neighbour_it;
+            }
+
+            // store conflict
+            if (!repeated)
+            {
+                pair<long,long> edges = (a<c) ? make_pair(e1_index, e2_index) : make_pair(e2_index, e1_index);
+
+                this->conflicts.push_back(edges);
+
+                // update adjacency lists
+                this->conflict_graph_adj_list[e1_index].push_back(e2_index);
+                this->conflict_graph_adj_list[e2_index].push_back(e1_index);
+            }
         }
+
+        if ( (unsigned) num_conflicts != conflicts.size())
+            cout << "num_conflicts = " << num_conflicts << ", conflict.size() = " << conflicts.size() << endl;
         
         input_fh.close();
     }
