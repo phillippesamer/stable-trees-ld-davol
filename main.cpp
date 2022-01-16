@@ -21,7 +21,7 @@ using namespace std;
 // execution switches
 double RUN_KSTAB_WITH_TIME_LIMIT = 3600;
 
-bool RUN_STEEPEST_ASCENT_LDDA = false;
+bool RUN_STEEPEST_ASCENT_LDDA = true;
 bool WRITE_LDDA_LOG_FILE = true;
 
 bool APPEND_SUMMARY_TO_DAT_FILE = true;
@@ -112,8 +112,10 @@ int main(int argc, char **argv)
             bool ldda_complete = lagrangean->dual_ascent(RUN_STEEPEST_ASCENT_LDDA);
 
             cout << endl << "ldda bound: ";
-            if ( ldda_complete)
+            if (ldda_complete)
                 cout << lagrangean->bound_log.back();
+            else if (!ldda_complete && lagrangean->problem_solved)   // infeasible
+                cout << " x ";
             else
                 cout << " - ";
             cout << " (runtime " << fixed << lagrangean->runtime << ")" << endl;
@@ -142,6 +144,8 @@ int main(int argc, char **argv)
             {
                 if (ldda_complete)
                     table_row << setw(10) << lagrangean->bound_log.back();
+                else if (!ldda_complete && lagrangean->problem_solved)   // infeasible
+                    table_row << setw(10) << " x ";
                 else
                     table_row << setw(10) << " - ";
                 table_row << setw(5) << "  &  ";

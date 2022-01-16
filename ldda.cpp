@@ -23,6 +23,7 @@ LDDA::LDDA(IO *instance, KStabModel *model)
     this->contracted_edges_weight = 0;
     this->contracted_edges = vector<long>();
     this->contracted_edges_mask = vector<bool>(instance->graph->num_edges, false);
+    this->removed_edges_mask = vector<bool>(instance->graph->num_edges, false);
 
     original_weights = vector<long>(instance->graph->w);
 
@@ -50,6 +51,7 @@ LDDA::LDDA(IO *instance, KStabModel *model, vector<long> initial_multipliers)
     this->contracted_edges_weight = 0;
     this->contracted_edges = vector<long>();
     this->contracted_edges_mask = vector<bool>(instance->graph->num_edges, false);
+    this->removed_edges_mask = vector<bool>(instance->graph->num_edges, false);
 
     original_weights = vector<long>(instance->graph->w);
 
@@ -67,6 +69,7 @@ LDDA::~LDDA()
     this->solution_pool.clear();
     this->contracted_edges.clear();
     this->contracted_edges_mask.clear();
+    this->removed_edges_mask.clear();
 
     free(ldda_clock_start);
     free(ldda_clock_partial);
@@ -151,9 +154,11 @@ bool LDDA::dual_ascent(bool steepest_ascent)
 
         if (instance->graph->mst() == false)
         {
-            cout << "Graph::mst() failed (graph is not connected)" << endl;
-            cout << "infeasible problem instance" << endl;
+            cout << endl << "Graph::mst() failed - graph is not connected ("
+                 << fixed_vars.size() << " vars fixed)" << endl
+                 << "infeasible problem instance" << endl;
 
+            this->problem_solved = true;
             this->runtime = total_time();
             return false;
         }
@@ -177,9 +182,11 @@ bool LDDA::dual_ascent(bool steepest_ascent)
 
         if (model->solve(false) <= 0 || model->solution_status != AT_OPTIMUM)
         {
-            cout << "KStabModel::solve() failed" << endl;
-            cout << "infeasible problem instance" << endl;
+            cout << endl << "KStabModel::solve() failed (" 
+                 << fixed_vars.size() << " vars fixed)" << endl
+                 << "infeasible problem instance" << endl;
 
+            this->problem_solved = true;
             this->runtime = total_time();
             return false;
         }
@@ -200,10 +207,10 @@ bool LDDA::dual_ascent(bool steepest_ascent)
                 mismatch.push_back(idx);
 
                 #ifdef DEBUG
-                    if (contracted_edges_mask[idx])
+                    if (contracted_edges_mask[idx] || removed_edges_mask[idx])
                     {
                         cout << "UNEXPECTED ERROR: solutions differ in an "
-                             << "index corresponding to a contracted edge"
+                             << "index corresponding to a fixed edge"
                              << endl;
                         this->runtime = total_time();
                         return false;
@@ -324,33 +331,143 @@ bool LDDA::dual_ascent(bool steepest_ascent)
         {
             long current_direction = mismatch[attempting_idx];
 
-            // case 1: x^r_e = 1 and y^r_e = 0 (inoc2022, thm 4.3)
-            if (instance->graph->mst_vector[current_direction])
+            // this variable might have been fixed by probings on previous directions
+            if ( contracted_edges_mask[current_direction] == false && 
+                 removed_edges_mask[current_direction] == false )
             {
-                #ifdef DEBUG
-                    /*
-                    cout << "x^" << iter << "_" << current_direction 
-                         << " = 1 > 0 = y^"  << iter << "_"
-                         << current_direction << endl;
-                    */
+                // case 1: x^r_e = 1 and y^r_e = 0 (inoc2022, thm 4.3)
+                if (instance->graph->mst_vector[current_direction])
+                {
+                    #ifdef DEBUG
+                        /*
+                        cout << "x^" << iter << "_" << current_direction 
+                             << " = 1 > 0 = y^"  << iter << "_"
+                             << current_direction << endl;
+                        */
 
-                    if (model->solution_vector[current_direction])
+                        if (model->solution_vector[current_direction])
+                        {
+                            cout << "UNEXPECTED ERROR: ";
+                            cout << "x^" << iter << "_" << current_direction
+                                 << "  =  1  =  y^"  << iter << "_"
+                                 << current_direction << endl;
+                            this->runtime = total_time();
+                            return false;
+                        }
+                    #endif
+
+                    // PROBING MST WITHOUT e TO DETERMINE \del^r_e
+                    pair<bool,long> probing_mst = edge_deletion_bound(current_direction);
+
+                    // the call above took care of the case where the probe is infeasible
+                    if ( probing_mst.first == true)
+                    {
+                        /*
+                        #ifdef DEBUG
+                            cout << "mst probing bound (includes contracted weight): " << probing_mst.second + (contracted_edges_weight - contracted_edges_offset) << endl;
+                        #endif
+                        */
+
+                        total_mst_time += instance->graph->probe_runtime;
+
+                        // PROBING KSTAB FORCING e TO DETERMINE \delta^r_e
+                        pair<ModelStatus,long> probing_kstab
+                            = vertex_fix_bound(current_direction);
+
+                        // the call above took care of the case where the probe is infeasible
+                        if (probing_kstab.first == STATUS_UNKNOWN)
+                        {
+                            cout << "probing var y[" << current_direction << "] = 1 failed" 
+                            << " (runtime: " << model->runtime() << " s)" << endl;
+
+                            this->runtime = total_time();
+                            return false;
+                        }
+                        else if (probing_kstab.first == AT_OPTIMUM)
+                        {
+                            /*
+                            #ifdef DEBUG
+                                cout << "kstab probing bound: " << probing_kstab.second << endl;
+                            #endif
+                            */
+
+                            total_kstab_time += model->runtime();
+
+                            // probings found feasible solutions => proceed to compute the bounds
+
+                            // NB! adding the weight of contracted edges, which do not appear in Graph::mst_probing_var()
+                            long probing_mst_bound = probing_mst.second + (contracted_edges_weight - contracted_edges_offset);
+                            long probing_kstab_bound = probing_kstab.second;
+
+                            long del = probing_mst_bound - instance->graph->mst_weight;
+                            long delta = probing_kstab_bound - model->solution_weight;
+
+                            #ifdef DEBUG
+                                if (min(del,delta) < 0)
+                                {
+                                    cout << "UNEXPECTED ERROR: min( delta=" << delta << ", del=" << del <<" ) < 0" << endl;
+                                    this->runtime = total_time();
+                                    return false;
+                                }
+                                /*
+                                else
+                                    cout << "delta = " << delta << ", del = " << del << endl;
+                                */
+                            #endif
+
+                            if ( min(del,delta) > 0 &&
+                                 min(del,delta) > chosen_bound_improvement )
+                            {
+                                iter_update = true;
+
+                                chosen_direction = current_direction;
+                                chosen_adjustment = (-1)*min(del,delta);
+                                chosen_bound_improvement = min(del,delta);
+
+                                if (!steepest_ascent)
+                                    done_with_first_ascent = true;
+                            }
+                        }
+                    }
+                }
+
+                // case 2: x^r_e = 0 and y^r_e = 1 (inoc2022, thm 4.2)
+                else
+                {
+                    #ifdef DEBUG
+                        /*
+                        cout << "x^" << iter << "_" << current_direction 
+                             << " = 0 < 1 = y^"  << iter << "_"
+                             << current_direction << endl;
+                        */
+
+                        if (!model->solution_vector[current_direction])
+                        {
+                            cout << "UNEXPECTED ERROR: ";
+                            cout << "x^" << iter << "_" << current_direction
+                                 << "  =  0  =  y^"  << iter << "_"
+                                 << current_direction << endl;
+
+                            this->runtime = total_time();
+                            return false;
+                        }
+                    #endif
+
+                    // PROBING MST FORCING e TO DETERMINE \del^r_e
+                    pair<bool,long> probing_mst = edge_contraction_bound(current_direction);
+
+                    // contracting an edge does not make a connected graph disconnected
+                    if (probing_mst.first == false)
                     {
                         cout << "UNEXPECTED ERROR: ";
-                        cout << "x^" << iter << "_" << current_direction
-                             << "  =  1  =  y^"  << iter << "_"
-                             << current_direction << endl;
+                        cout << "probing x^" << iter << "_" << current_direction
+                             << "  =  1 (edge contraction) gave disconnected graph"
+                             << endl;
+
                         this->runtime = total_time();
                         return false;
                     }
-                #endif
 
-                // PROBING MST WITHOUT e TO DETERMINE \del^r_e
-                pair<bool,long> probing_mst = edge_deletion_bound(current_direction);
-
-                // the call above took care of the case where the probe is infeasible
-                if (probing_mst.first == true)
-                {
                     /*
                     #ifdef DEBUG
                         cout << "mst probing bound (includes contracted weight): " << probing_mst.second + (contracted_edges_weight - contracted_edges_offset) << endl;
@@ -359,14 +476,14 @@ bool LDDA::dual_ascent(bool steepest_ascent)
 
                     total_mst_time += instance->graph->probe_runtime;
 
-                    // PROBING KSTAB FORCING e TO DETERMINE \delta^r_e
+                    // PROBING KSTAB WITHOUT e TO DETERMINE \delta^r_e
                     pair<ModelStatus,long> probing_kstab
-                        = vertex_fix_bound(current_direction);
+                        = vertex_deletion_bound(current_direction);
 
                     // the call above took care of the case where the probe is infeasible
                     if (probing_kstab.first == STATUS_UNKNOWN)
                     {
-                        cout << "probing var y[" << current_direction << "] = 1 failed" 
+                        cout << "probing var y[" << current_direction << "] = 0 failed" 
                         << " (runtime: " << model->runtime() << " s)" << endl;
 
                         this->runtime = total_time();
@@ -384,7 +501,7 @@ bool LDDA::dual_ascent(bool steepest_ascent)
 
                         // probings found feasible solutions => proceed to compute the bounds
 
-                        // NB! adding the weight of contracted edges, which do not appear in Graph::mst_probing_var()
+                        // NB! contracted edges do not appear in Graph::mst_probing_var()
                         long probing_mst_bound = probing_mst.second + (contracted_edges_weight - contracted_edges_offset);
                         long probing_kstab_bound = probing_kstab.second;
 
@@ -410,7 +527,7 @@ bool LDDA::dual_ascent(bool steepest_ascent)
                             iter_update = true;
 
                             chosen_direction = current_direction;
-                            chosen_adjustment = (-1)*min(del,delta);
+                            chosen_adjustment = min(del,delta);
                             chosen_bound_improvement = min(del,delta);
 
                             if (!steepest_ascent)
@@ -418,114 +535,9 @@ bool LDDA::dual_ascent(bool steepest_ascent)
                         }
                     }
                 }
+
+                // done evaluating this direction (i.e. mismatching variable)
             }
-
-            // case 2: x^r_e = 0 and y^r_e = 1 (inoc2022, thm 4.2)
-            else
-            {
-                #ifdef DEBUG
-                    /*
-                    cout << "x^" << iter << "_" << current_direction 
-                         << " = 0 < 1 = y^"  << iter << "_"
-                         << current_direction << endl;
-                    */
-
-                    if (!model->solution_vector[current_direction])
-                    {
-                        cout << "UNEXPECTED ERROR: ";
-                        cout << "x^" << iter << "_" << current_direction
-                             << "  =  0  =  y^"  << iter << "_"
-                             << current_direction << endl;
-
-                        this->runtime = total_time();
-                        return false;
-                    }
-                #endif
-
-                // PROBING MST FORCING e TO DETERMINE \del^r_e
-                pair<bool,long> probing_mst = edge_contraction_bound(current_direction);
-
-                // contracting an edge does not make a connected graph disconnected
-                if (probing_mst.first == false)
-                {
-                    cout << "UNEXPECTED ERROR: ";
-                    cout << "probing x^" << iter << "_" << current_direction
-                         << "  =  1 (edge contraction) gave disconnected graph"
-                         << endl;
-
-                    this->runtime = total_time();
-                    return false;
-                }
-
-                /*
-                #ifdef DEBUG
-                    cout << "mst probing bound (includes contracted weight): " << probing_mst.second + (contracted_edges_weight - contracted_edges_offset) << endl;
-                #endif
-                */
-
-                total_mst_time += instance->graph->probe_runtime;
-
-                // PROBING KSTAB WITHOUT e TO DETERMINE \delta^r_e
-                pair<ModelStatus,long> probing_kstab
-                    = vertex_deletion_bound(current_direction);
-
-                // the call above took care of the case where the probe is infeasible
-                if (probing_kstab.first == STATUS_UNKNOWN)
-                {
-                    cout << "probing var y[" << current_direction << "] = 0 failed" 
-                    << " (runtime: " << model->runtime() << " s)" << endl;
-
-                    this->runtime = total_time();
-                    return false;
-                }
-                else if (probing_kstab.first == AT_OPTIMUM)
-                {
-                    /*
-                    #ifdef DEBUG
-                        cout << "kstab probing bound: " << probing_kstab.second << endl;
-                    #endif
-                    */
-
-                    total_kstab_time += model->runtime();
-
-                    // probings found feasible solutions => proceed to compute the bounds
-
-                    // NB! contracted edges do not appear in Graph::mst_probing_var()
-                    long probing_mst_bound = probing_mst.second + (contracted_edges_weight - contracted_edges_offset);
-                    long probing_kstab_bound = probing_kstab.second;
-
-                    long del = probing_mst_bound - instance->graph->mst_weight;
-                    long delta = probing_kstab_bound - model->solution_weight;
-
-                    #ifdef DEBUG
-                        if (min(del,delta) < 0)
-                        {
-                            cout << "UNEXPECTED ERROR: min( delta=" << delta << ", del=" << del <<" ) < 0" << endl;
-                            this->runtime = total_time();
-                            return false;
-                        }
-                        /*
-                        else
-                            cout << "delta = " << delta << ", del = " << del << endl;
-                        */
-                    #endif
-
-                    if ( min(del,delta) > 0 &&
-                         min(del,delta) > chosen_bound_improvement )
-                    {
-                        iter_update = true;
-
-                        chosen_direction = current_direction;
-                        chosen_adjustment = min(del,delta);
-                        chosen_bound_improvement = min(del,delta);
-
-                        if (!steepest_ascent)
-                            done_with_first_ascent = true;
-                    }
-                }
-            }
-
-            // done evaluating this direction (i.e. mismatching variable)
 
             attempting_idx = (attempting_idx+1) % mismatch.size();
             ++attempt;
@@ -649,8 +661,10 @@ pair<bool,long> LDDA::edge_deletion_bound(long idx)
     // probing var at 0 infeasible => fix var at 1 
     if (probing_mst.first == false)
     {
+        #ifdef DEBUG_LDDA_PROBING
         cout << "probing var x[" << idx << "] = 0 gives a disconnected graph ";
         cout << "=> fixing element at one throughout" << endl;
+        #endif
 
         fix_element_at_one_in_graph_and_model(idx);
     }
@@ -676,9 +690,11 @@ pair<ModelStatus,long> LDDA::vertex_deletion_bound(long idx)
     // probing var at 0 infeasible => fix var at 1
     if (probing_kstab.first == IS_INFEASIBLE)
     {
+        #ifdef DEBUG_LDDA_PROBING
         cout << "probing var y[" << idx << "] = 0 gives an infeasible model "
              << "(runtime: " << model->runtime() << " s)";
         cout << " => fixing element at one throughout" << endl;
+        #endif
 
         fix_element_at_one_in_graph_and_model(idx);
     }
@@ -697,10 +713,13 @@ pair<ModelStatus,long> LDDA::vertex_fix_bound(long idx)
     {
         iter_update = true;
         fixed_vars.push_back( make_pair(idx, false) );
+        removed_edges_mask[idx] = true;
 
+        #ifdef DEBUG_LDDA_PROBING
         cout << "probing var y[" << idx << "] = 1 gives an infeasible model "
              << "(runtime: " << model->runtime() << " s)";
         cout << " => fixing element at zero throughout" << endl;
+        #endif
 
         model->fix_var(idx, false);
         instance->graph->lemon_delete_edge(idx);
@@ -729,9 +748,13 @@ void LDDA::fix_element_at_one_in_graph_and_model(long idx)
 
     if (!dropped_edges.empty())
     {
-        #ifdef DEBUG
-        cout << "edge contraction implied dropping (" << dropped_edges.size()
-             << ") parallel edges" << endl;
+        #ifdef DEBUG_LDDA_PROBING
+        cout << "contract edge " << idx << " implied dropping (" << dropped_edges.size()
+             << ") parallel edges: ";
+        for (vector<long>::iterator it = dropped_edges.begin();
+             it != dropped_edges.end(); ++it)
+            cout << *it << " ";
+        cout << endl;
         #endif
 
         // fix corresponding model vars at zero
@@ -739,6 +762,7 @@ void LDDA::fix_element_at_one_in_graph_and_model(long idx)
              it != dropped_edges.end(); ++it)
         {
             fixed_vars.push_back( make_pair(*it, false) );
+            removed_edges_mask[*it] = true;
             model->fix_var(*it, false);
         }
     }
@@ -748,16 +772,21 @@ void LDDA::fix_element_at_one_in_graph_and_model(long idx)
 
     if (!conflicting_vars.empty())
     {
-        #ifdef DEBUG
-        cout << "fix var at 1 implied fixing (" << conflicting_vars.size()
-             << ") conflicting edges" << endl;
+        #ifdef DEBUG_LDDA_PROBING
+        cout << "fix_var " << idx << " at 1 implied fixing (" << conflicting_vars.size()
+             << ") conflicting edges: ";
+        for (vector<long>::iterator it = conflicting_vars.begin();
+             it != conflicting_vars.end(); ++it)
+            cout << *it << " ";
+        cout << endl;
         #endif
 
-        // remove corresponding graph edges
+        // remove corresponding edges
         for (vector<long>::iterator it = conflicting_vars.begin();
              it != conflicting_vars.end(); ++it)
         {
             fixed_vars.push_back( make_pair(*it, false) );
+            removed_edges_mask[*it] = true;
             instance->graph->lemon_delete_edge(*it);
         }
     }

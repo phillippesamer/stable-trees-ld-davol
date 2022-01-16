@@ -54,6 +54,7 @@ private:
     long contracted_edges_weight;
     vector<long> contracted_edges;
     vector<bool> contracted_edges_mask;
+    vector<bool> removed_edges_mask;
 
     stringstream full_log;
 

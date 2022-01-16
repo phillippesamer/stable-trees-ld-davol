@@ -125,16 +125,63 @@ vector<long> Graph::lemon_contract_edge(long contract_index)
 
     long vertex_1 = this->s[contract_index];
     long vertex_2 = this->t[contract_index];
-    vector<ListGraph::Edge> dropped_edges = 
-        lemon_contract_dropping_parallel_edges( *lemon_graph,
-                                                *lemon_weight,
-                                                lemon_vertices[vertex_1],
-                                                lemon_vertices[vertex_2] );
 
-    // indices IN THE ORIGINAL GRAPH of parallel edges dropped
+    // return value: indices IN THE ORIGINAL GRAPH of parallel edges dropped
     vector<long> dropped_indices = vector<long>();
-    for (vector<ListGraph::Edge>::iterator it = dropped_edges.begin(); it != dropped_edges.end(); ++it)
-        dropped_indices.push_back( (*lemon_edges_inverted_index)[*it] );
+
+    vector<ListGraph::Edge> parallel_edges = 
+        lemon_parallel_edges_if_contract( *lemon_graph,
+                                          *lemon_weight,
+                                           lemon_vertices[vertex_1],
+                                           lemon_vertices[vertex_2] );
+
+    // references to make notation less cumbersome
+    ListGraph &g = *lemon_graph;
+    ListGraph::Node &x = lemon_vertices[vertex_1];
+    ListGraph::Node &y = lemon_vertices[vertex_2];
+
+    // delete parallel edges of larger costs
+    #ifdef DEBUG_CONTRACTION_WRAPPER
+        cout << "deleting " << parallel_edges.size() << " edges:" << endl;
+    #endif
+
+    vector<ListGraph::Edge>::iterator parallel = parallel_edges.begin();
+    while (parallel != parallel_edges.end())
+    {
+        #ifdef DEBUG_CONTRACTION_WRAPPER
+            cout << "- {" << g.id(g.u(*parallel)) << "," << g.id(g.v(*parallel)) << "}, weight " << (*lemon_weight)[*parallel] << endl;
+        #endif
+
+        // index in the original graph
+        dropped_indices.push_back( (*lemon_edges_inverted_index)[*parallel] );
+
+        g.erase(*parallel); // NB! INVALIDATES NOT ONLY ITERATORS, BUT ALSO USING "PARALLEL" AS KEY IN MAPS
+
+        ++parallel;
+    }
+
+    #ifdef DEBUG_CONTRACTION_WRAPPER
+        cout << "done!" << endl;
+    #endif
+
+    /*
+    cout << "after contracting {" << g.id(x) << "," << g.id(y) << "}: \t edges from " << g.id(x) << " are ";
+
+    for (ListGraph::IncEdgeIt edge_from_x(g,x); edge_from_x != INVALID; ++edge_from_x)
+    {
+            cout << g.id(g.u(edge_from_x)) << " to ";
+            cout << g.id(g.v(edge_from_x)) << ", ";
+    }
+    cout << " \t and edges from " << g.id(y) << " are ";
+    for (ListGraph::IncEdgeIt edge_from_y(g,y); edge_from_y != INVALID; ++edge_from_y)
+    {
+            cout << g.id(g.u(edge_from_y)) << " to ";
+            cout << g.id(g.v(edge_from_y)) << ", ";
+    }
+    cout << endl;
+    */
+
+    g.contract(x, y, true);
 
     return dropped_indices;
 }
@@ -196,7 +243,7 @@ bool Graph::mst()
 
     if (tree_edges.size() != (unsigned) this->num_vertices-1)
     {
-        cout << "UNEXPECTED ERROR: KRUSKAL RETURNED A FOREST, NOT A TREE" << endl;
+        // KRUSKAL RETURNED A FOREST, NOT A TREE
         return false;
     }
     else
@@ -273,10 +320,39 @@ pair<bool,long> Graph::mst_probing_var(long probe_idx, bool probe_value)
         #endif
 
         // 1.2 CONTRACT EDGE
-        lemon_contract_dropping_parallel_edges( graph_copy,
-                                                weights_copy,
-                                                vertex_ref_old2new[lemon_vertices[vertex_1]],
-                                                vertex_ref_old2new[lemon_vertices[vertex_2]] );
+        vector<ListGraph::Edge> parallel_edges = 
+        lemon_parallel_edges_if_contract( graph_copy,
+                                          weights_copy,
+                                          vertex_ref_old2new[lemon_vertices[vertex_1]],
+                                          vertex_ref_old2new[lemon_vertices[vertex_2]] );
+
+        // references to make notation less cumbersome
+        ListGraph &g = graph_copy;
+        ListGraph::Node &x = vertex_ref_old2new[lemon_vertices[vertex_1]];
+        ListGraph::Node &y = vertex_ref_old2new[lemon_vertices[vertex_2]];
+
+        // delete parallel edges of larger costs
+        #ifdef DEBUG_CONTRACTION_WRAPPER
+            cout << "deleting " << parallel_edges.size() << " edges:" << endl;
+        #endif
+
+        vector<ListGraph::Edge>::iterator parallel = parallel_edges.begin();
+        while (parallel != parallel_edges.end())
+        {
+            #ifdef DEBUG_CONTRACTION_WRAPPER
+                cout << "- {" << g.id(g.u(*parallel)) << "," << g.id(g.v(*parallel)) << "}, weight " << weights_copy[*parallel] << endl;
+            #endif
+
+            g.erase(*parallel); // NB! INVALIDATES NOT ONLY ITERATORS, BUT ALSO USING "PARALLEL" AS KEY IN MAPS
+
+            ++parallel;
+        }
+
+        #ifdef DEBUG_CONTRACTION_WRAPPER
+            cout << "done!" << endl;
+        #endif
+
+        g.contract(x, y, true);
 
         #ifdef DEBUG_MST_PROBING
             cout << "the edited graph copy consists of:" << endl;
@@ -327,7 +403,7 @@ pair<bool,long> Graph::mst_probing_var(long probe_idx, bool probe_value)
         if (mst_edges.size() != (unsigned) this->num_vertices - 1)
         {
             result_is_tree = false;
-            #ifdef DEBUG
+            #ifdef DEBUG_MST_PROBING
                 cout << "WARNING: kruskal returns a spanning forest (" << mst_edges.size() << " edges!)" << endl;
             #endif
         }
@@ -380,10 +456,10 @@ bool Graph::lemon_test_adj(ListGraph &g, ListGraph::Node &x, ListGraph::Node &y)
 }
 
 vector<ListGraph::Edge> 
-Graph::lemon_contract_dropping_parallel_edges(ListGraph &g,
-                                              ListGraph::EdgeMap<long> &w,
-                                              ListGraph::Node &x,
-                                              ListGraph::Node &y)
+Graph::lemon_parallel_edges_if_contract(ListGraph &g,
+                                        ListGraph::EdgeMap<long> &w,
+                                        ListGraph::Node &x,
+                                        ListGraph::Node &y)
 {
     /**
      * wrapper over LEMON, contracting edge xy and keeping only the
@@ -464,26 +540,6 @@ Graph::lemon_contract_dropping_parallel_edges(ListGraph &g,
             }
         }
     }
-
-    // delete parallel edges of larger costs
-    #ifdef DEBUG_CONTRACTION_WRAPPER
-        cout << "deleting " << deleted_edges.size() << " edges:" << endl;
-    #endif
-
-    for (unsigned long i=0; i<deleted_edges.size(); ++i)
-    {
-        #ifdef DEBUG_CONTRACTION_WRAPPER
-            cout << "- {" << g.id(g.u(deleted_edges[i])) << "," << g.id(g.v(deleted_edges[i])) << "}, weight " << w[deleted_edges[i]] << endl;
-        #endif
-
-        g.erase(deleted_edges[i]);
-    }
-
-    #ifdef DEBUG_CONTRACTION_WRAPPER
-        cout << "done!" << endl;
-    #endif
-
-    g.contract(x, y, true);
 
     return deleted_edges;
 }

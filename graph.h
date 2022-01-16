@@ -88,10 +88,10 @@ private:
     ListGraph::Edge lemon_test_adj_getting_edge(ListGraph &,
                                                 ListGraph::Node &,
                                                 ListGraph::Node &);
-    vector<ListGraph::Edge> lemon_contract_dropping_parallel_edges(ListGraph &,
-                                                                   ListGraph::EdgeMap<long> &,
-                                                                   ListGraph::Node &,
-                                                                   ListGraph::Node &);
+    vector<ListGraph::Edge> lemon_parallel_edges_if_contract(ListGraph &,
+                                                            ListGraph::EdgeMap<long> &,
+                                                            ListGraph::Node &,
+                                                            ListGraph::Node &);
 };
 
 #endif
