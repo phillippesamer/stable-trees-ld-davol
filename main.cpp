@@ -21,7 +21,7 @@ using namespace std;
 // execution switches
 double RUN_KSTAB_WITH_TIME_LIMIT = 3600;
 
-bool RUN_STEEPEST_ASCENT_LDDA = true;
+bool RUN_STEEPEST_ASCENT_LDDA = false;
 bool WRITE_LDDA_LOG_FILE = true;
 
 bool APPEND_SUMMARY_TO_DAT_FILE = true;

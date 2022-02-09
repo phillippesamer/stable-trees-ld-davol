@@ -431,6 +431,7 @@ carrabs_n75=(
 "input/carrabs-et-alia/CMST_75_1110_43085_805.cms" 
 )
 
+
 carrabs_n100=( 
 "input/carrabs-et-alia/CMST_100_990_4896_811.cms" 
 "input/carrabs-et-alia/CMST_100_990_4896_817.cms" 
@@ -480,7 +481,7 @@ carrabs_n100=(
 )
 
 
-for entry in "${carrabs_n25[@]}";
+for entry in "${carrabs_n100[@]}";
 do
     echo "$entry"
     #output=$(./ldda $entry | tail -n 1 >> "lp-new.out")
