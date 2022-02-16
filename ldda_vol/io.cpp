@@ -95,6 +95,7 @@ bool IO::parse_input_file(string filename)
             ListGraph::Edge e = graph->lemon_graph->addEdge(graph->lemon_vertices[i], graph->lemon_vertices[j]);
             graph->lemon_edges.push_back(e);
             (*graph->lemon_weight)[e] = w;
+            (*graph->opposite_weights)[e] = (-1)*w;
             (*graph->lemon_edges_inverted_index)[e] = line_idx;
         }
 

@@ -1,7 +1,7 @@
 fdata=data
 *fdata=data
-*dualfile=dual.txt
-*dual_savefile=dual.txt
+*dualfile=dual_initial.txt
+*dual_savefile=dual_final.txt
 *int_savefile=int_sol.txt
 h_iter=100
 

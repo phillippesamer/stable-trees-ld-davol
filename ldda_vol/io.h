@@ -34,6 +34,9 @@ public:
     long get_mst_weight() { return graph->mst_weight; }
     double get_mst_runtime() { return graph->mst_runtime; }
 
+    bool run_maxst() { return graph->maxst(); }
+    long get_maxst_weight() { return graph->maxst_weight; }
+
     bool test_stability(vector<bool> &);
     bool test_acyclic(vector<bool> &);
     bool test_acyclic_kstab(vector<bool> &);

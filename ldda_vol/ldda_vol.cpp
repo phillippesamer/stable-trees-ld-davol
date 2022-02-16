@@ -39,6 +39,9 @@ double RUN_KSTAB_WITH_TIME_LIMIT = 3600;
 bool RUN_STEEPEST_ASCENT_LDDA = false;
 bool WRITE_LDDA_LOG_FILE = true;
 
+bool WRITE_LDDA_FINAL_MULTIPLIERS = true;
+string FINAL_MULTILIERS_FILE_NAME = string("tmp_ldda_multipliers.dat");
+
 bool APPEND_SUMMARY_TO_DAT_FILE = true;
 string SUMMARY_FILE_NAME = string("xp3table.dat");
 
@@ -54,6 +57,15 @@ int main(int argc, char* argv[]) {
     // USER CODE BEFORE VOLUME IS RUN
     if (ldda(argc, argv) < 0)
         return 0;
+
+    // remove UFL specific code, paraphrasing what should I write instead
+    // implement compute_rc and solve_subproblem
+    // heuristic in the end..?
+
+    // When done:
+    // give maxweightST primal bound to volume
+    // set correct filename of the initial multipliers on .par file
+
     //////////////////////////////////////////////////////////////////////////
 
    // read in problem specific parameters and initialize data structures
@@ -82,7 +94,9 @@ int main(int argc, char* argv[]) {
       int idummy;
       for (int i = 0; i < dsize; ++i) {
 	 fscanf(file, "%i%lf", &idummy, &dinit[i]);
+     cout << "read x[" << i << "] = " << dinit[i] << ", ";
       }
+      cout << endl;
       fclose(file);
    }
 
@@ -416,6 +430,10 @@ UFL::heuristics(const VOL_problem& p,
    return 0;
 }
 
+
+//////////////////////////////////////////////////////////////////////////////
+// USER FUNCTIONS
+
 int ldda(int argc, char **argv)
 {
     if (argc != 2)
@@ -433,6 +451,13 @@ int ldda(int argc, char **argv)
         delete instance;
         return -1;
     }
+
+    ///////////////////////////////////////////////////////////////////
+    // VOLUME EXTENSION
+
+    instance->run_maxst();
+    ///////////////////////////////////////////////////////////////////
+
 
     // LP relaxation bound of the MSTCC natural IP formulation
     StableSpanningTreeModel *lpr_model = new StableSpanningTreeModel(instance);
@@ -541,6 +566,38 @@ int ldda(int argc, char **argv)
                 table_row << setw(10) << fixed << lagrangean->runtime;
                 table_row << setw(5) << endl;
             }
+
+            ///////////////////////////////////////////////////////////////////
+            // VOLUME EXTENSION
+
+            cout << "LDDA primal bound: " << instance->get_maxst_weight() << endl;
+
+            if (WRITE_LDDA_FINAL_MULTIPLIERS)
+            {
+                ofstream mult_file(FINAL_MULTILIERS_FILE_NAME.c_str(), ofstream::out);
+                if (mult_file.is_open())
+                {
+                    long counter = 0;
+                    vector<long>::iterator it = lagrangean->multipliers_log.back().begin();
+                    while (it != lagrangean->multipliers_log.back().end())
+                    {
+                        mult_file << counter << " " << (*it) << endl;
+                        ++counter;
+                        ++it;
+                    }
+                    mult_file.close();
+                }
+                else
+                {
+                    cout << "ERROR: unable to write dat file with final LDDA multipliers" << endl;
+                }
+            }
+
+
+
+
+
+            ///////////////////////////////////////////////////////////////////
 
             delete lagrangean;
         }

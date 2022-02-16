@@ -55,6 +55,11 @@ public:
     pair<bool,long> mst_probing_var(long, bool);
     double probe_runtime;
 
+    // volume only: maximum weight spanning tree primal bound for LDDA
+    bool maxst();
+    long maxst_weight;
+    vector<bool> maxst_vector;
+
 private:
     friend class IO;
     friend class KStabModel;
@@ -92,6 +97,9 @@ private:
                                                             ListGraph::EdgeMap<long> &,
                                                             ListGraph::Node &,
                                                             ListGraph::Node &);
+
+    // volume only: negative/opposite edge weights
+    ListGraph::EdgeMap<long> *opposite_weights;
 };
 
 #endif

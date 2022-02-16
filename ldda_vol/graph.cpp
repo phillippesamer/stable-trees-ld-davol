@@ -47,6 +47,7 @@ Graph::~Graph()
         delete lemon_weight;
         delete lemon_edges_inverted_index;
         delete lemon_graph;
+        delete opposite_weights;
     }
 }
 
@@ -84,6 +85,9 @@ void Graph::init_lemon()
     lemon_edges.reserve(num_edges);
     lemon_weight = new ListGraph::EdgeMap<long>(*lemon_graph);
     lemon_edges_inverted_index = new ListGraph::EdgeMap<long>(*lemon_graph);
+
+    // volume only
+    opposite_weights = new ListGraph::EdgeMap<long>(*lemon_graph);
 }
 
 void Graph::update_single_weight(long idx, long new_weight)
@@ -191,7 +195,7 @@ bool Graph::mst()
     /***
      * Using LEMON to calculate a minimum spanning tree via their efficient 
      * implementation of Kruskal's algorithm (actually, the efficient union-find
-     * is the game-changer). The MST cost and solution are store in this object.
+     * is the game-changer). The MST cost and solution are stored in this object.
      */
 
     #ifdef DEBUG_MST
@@ -239,6 +243,49 @@ bool Graph::mst()
         cout << endl;
 
         cout << "MST runtime: " << mst_timer.realTime() << endl;
+    #endif
+
+    if (tree_edges.size() != (unsigned) this->num_vertices-1)
+    {
+        // KRUSKAL RETURNED A FOREST, NOT A TREE
+        return false;
+    }
+    else
+        return true;
+}
+
+bool Graph::maxst()
+{
+    /***
+     * Using LEMON to calculate a maximum weight spanning tree (find MST using
+     * negative/opposite edge weights). The corresponding weight is stored in
+     * this object.
+     */
+
+    #ifdef DEBUG_MAXWEIGHTST
+        cout << "Determining an MaxWeightST in the graph with edges:" << endl;
+        for (ListGraph::EdgeIt e_it(*lemon_graph); e_it != INVALID; ++e_it)
+        {
+            cout << "edge " << lemon_graph->id(e_it) << " is {"
+                 << lemon_graph->id(lemon_graph->u(e_it)) << ","
+                 << lemon_graph->id(lemon_graph->v(e_it)) << "}, ";
+            cout << "inverted index = " << (*lemon_edges_inverted_index)[e_it] << ", ";
+            cout << "weight = " << (*opposite_weights)[e_it] << endl;
+        }
+    #endif
+
+    vector<ListGraph::Edge> tree_edges;
+    this->maxst_weight 
+        = (-1)*kruskal(*lemon_graph, *opposite_weights, back_inserter(tree_edges));
+
+    #ifdef DEBUG_MAXWEIGHTST
+        cout << "MaxWeightST weight = " << this->maxst_weight << endl;
+
+        cout << "MaxWeightST edges (in LEMON): " << endl;
+        for (unsigned i = 0; i != tree_edges.size(); ++i)
+            cout << "{" << lemon_graph->id(lemon_graph->u(tree_edges[i])) << ", "
+                 << lemon_graph->id(lemon_graph->v(tree_edges[i])) << "}"
+                 << ", Graph edge " << (*lemon_edges_inverted_index)[ tree_edges[i] ] << endl;
     #endif
 
     if (tree_edges.size() != (unsigned) this->num_vertices-1)

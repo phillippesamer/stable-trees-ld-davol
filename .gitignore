@@ -3,4 +3,6 @@
 *.log
 *_xp1.out
 *.dat
+ldda_vol/dual_initial.txt
+ldda_vol/dual_final.txt
 
