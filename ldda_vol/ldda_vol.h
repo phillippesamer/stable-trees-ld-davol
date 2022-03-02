@@ -1,15 +1,15 @@
-// Copyright (C) 2000, International Business Machines
-// Corporation and others.  All Rights Reserved.
-// This code is licensed under the terms of the Eclipse Public License (EPL).
+#ifndef __LDDAVOL_H__
+#define __LDDAVOL_H__
 
-#ifndef __UFL_HPP__
-#define __UFL_HPP__
+#include "kstab_model.h"
+#include "ldda.h"
 
 #include <cstdio>
 #include <cfloat>
 #include <cstring>
 #include <string>
 
+// COIN-OR Vol header
 #include "VolVolume.hpp"
 
 // parameters controlled by the user
@@ -27,18 +27,41 @@ public:
 };
 
 
-
-class UFL : public VOL_user_hooks {
+/***
+ * \file lddda_vol.h
+ * 
+ * Module especializing the volume algorithm implementation available in the
+ * COIN-OR Vol project (see https://github.com/coin-or/Vol). Also inherits
+ * from the LDDA class which approximates the lagrangean decomposition bound
+ * with a dual ascent approach.
+ * 
+ * NB: Vol is licensed under the EPL license.
+ * 
+ * \author Phillippe Samer <phillippes@gmail.com>
+ * \date 03.02.2022
+ */
+class LDDAVolume : public VOL_user_hooks, public LDDA
+{
 public:
+    LDDAVolume(IO*, KStabModel*);
+    LDDAVolume(IO*, KStabModel*, vector<long>);
+    virtual ~LDDAVolume();
+    LDDAVolume(const LDDAVolume &);
+
+    bool run_volume();
+    void UFL_read_data(const char*);
+
   // for all hooks: return value of -1 means that volume should quit
+
   // compute reduced costs
    int compute_rc(const VOL_dvector& u, VOL_dvector& rc);
+
   // solve relaxed problem
    int solve_subproblem(const VOL_dvector& u, const VOL_dvector& rc,
 			double& lcost, VOL_dvector& x, VOL_dvector&v,
 			double& pcost);
+
   // primal heuristic
-  // return DBL_MAX in heur_val if feas sol wasn't/was found 
    int heuristics(const VOL_problem& p, 
 		  const VOL_dvector& x, double& heur_val);
 
@@ -51,61 +74,6 @@ public:
   int ncust, nloc; // number of customers, number of locations
   VOL_ivector ix;   // best integer feasible solution so far
   double      icost;  // value of best integer feasible solution 
-public:
-  UFL() : icost(DBL_MAX) {}
-  virtual ~UFL() {}  
 };
-
-//#############################################################################
-//########  Member functions          #########################################
-//#############################################################################
-
-//****** UFL_parms
-// reading parameters specific to facility location
-UFL_parms::UFL_parms(const char *filename) :
-   fdata(""), 
-   h_iter(10)
-{
-   char s[500];
-   FILE * file = fopen(filename, "r");
-   if (!file) { 
-      printf("Failure to open ufl datafile: %s\n ", filename);
-      abort();
-   }
-   
-   while (fgets(s, 500, file)) {
-      const int len = strlen(s) - 1;
-      if (s[len] == '\n')
-	 s[len] = 0;
-      std::string ss;
-      ss = s;
-      
-      if (ss.find("fdata") == 0) {
-	 int j = ss.find("=");
-	 int j1 = ss.length() - j + 1;
-	 fdata = ss.substr(j+1, j1);
-	 
-      } else if (ss.find("dualfile") == 0) {
-	 int j = ss.find("=");
-	 int j1 = ss.length() - j + 1;
-	 dualfile = ss.substr(j+1, j1);
-	 
-      } else if (ss.find("dual_savefile") == 0) {
-	 int j = ss.find("=");
-	 int j1 = ss.length() - j + 1;
-	 dual_savefile = ss.substr(j+1, j1);
-
-      } else if (ss.find("int_savefile") == 0) {
-	 int j = ss.find("=");
-	 int j1 = ss.length() - j + 1;
-	 int_savefile = ss.substr(j+1, j1);
-	 
-      } else if (ss.find("h_iter") == 0) {
-	 int i = ss.find("=");  
-	 h_iter = atoi(&s[i+1]);
-      }	
-   }
-   fclose(file);
-}
 
 #endif

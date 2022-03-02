@@ -39,7 +39,7 @@ public:
 
     stringstream create_log();
 
-private:
+protected:
     IO *instance;
     KStabModel *model;
 

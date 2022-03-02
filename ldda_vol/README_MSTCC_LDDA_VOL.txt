@@ -17,21 +17,21 @@ make
 
 -- To setup MSTCC LDDA_Vol
 
-if making and running the UFL example above worked fine,
+assuming that building and running the UFL example above worked fine,
 make a copy of the VolUfl folder on the same directory (Vol/examples/)
-once inside the new folder, download all MSTCC LDDA_Vol files
-edit the Makefile preamble, replacing the corresponding lines by:
 
-# In this case we define DRIVER to be the name of the executable and filename
-# without extension
-DRIVER = ldda_vol
+once inside the new folder, download all MSTCC LDDA_Vol files
+edit the Makefile preamble, replacing the corresponding lines as follows
+(NB! please use the path to your current Gurobi installation where relevant):
+
+DRIVER = main
 
 # CHANGEME: This should be the name of your executable
 EXE = $(DRIVER)
 
 # CHANGEME: Here is the name of all object files corresponding to the source
 #           code that you wrote in order to define the problem statement
-OBJS =  $(DRIVER).o graph.o io.o kstab_model.o mstcc_model.o ldda.o
+OBJS =  graph.o io.o kstab_model.o mstcc_model.o ldda.o ldda_vol.o $(DRIVER).o
 
 # CHANGEME: Additional libraries
 ADDLIBS = -L/opt/gurobi950/linux64/lib/ -lgurobi_g++5.2 -lgurobi95 -lm -lemon
@@ -47,4 +47,4 @@ SRCDIR = .
 -- To make and run LDDA_Vol
 
 make
-./ldda_vol [input file]
+./main [input file]
