@@ -805,17 +805,31 @@ stringstream LDDA::create_log()
 {
     /// prepare log of the LDDA execution as a stringstream object
     stringstream log;
+
+    log << "LDDA: Lagrangean Decomposition based Dual Ascent" << endl;
+
+    log << setw(63) << "";
+    log << setw(9) << "mst  ";
+    log << setw(9) << "mst  ";
+    log << setw(11) << "kstab ";
+    log << setw(11) << "kstab ";
+    log << setw(35) << "" << endl;
+
     log << setw(9) << "feasible?";
     log << setw(9) << "iter";
     log << setw(9) << "bound";
     log << setw(12) << "#attempts";
     log << setw(12) << "direction";
     log << setw(12) << "adjustment";
-    log << setw(9) << "mst (s)";
-    log << setw(13) << "kstab (s)";
+    log << setw(9) << "weight";
+    log << setw(9) << "runtime";
+    log << setw(11) << "weight";
+    log << setw(11) << "runtime";
     log << setw(13) << "iter (s)";
     log << setw(13) << "varsfixed";
+    log << setw(7) << "obs";
     log << endl;
+
     log << full_log.str() << endl;
 
     log << "LDDA multipliers log:" << endl;

@@ -45,6 +45,7 @@ private:
     friend class KStabModel;
     friend class StableSpanningTreeModel;
     friend class LDDA;
+    friend class LDDAVolume;
 
     // instance data
     long num_conflicts;

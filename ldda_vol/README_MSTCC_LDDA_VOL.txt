@@ -21,8 +21,12 @@ assuming that building and running the UFL example above worked fine,
 make a copy of the VolUfl folder on the same directory (Vol/examples/)
 
 once inside the new folder, download all MSTCC LDDA_Vol files
-edit the Makefile preamble, replacing the corresponding lines as follows
-(NB! please use the path to your current Gurobi installation where relevant):
+edit the Makefile as follows:
+- in the trigger all (line 74?) remove "data";
+- in the trigger clean (line 84?) remove "data";
+- remove the trigger data completely (lines 86-87)
+- in the preamble, replace the corresponding lines as below  (NB! please use
+the path to your current Gurobi installation where relevant):
 
 DRIVER = main
 

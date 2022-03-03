@@ -58,9 +58,9 @@ protected:
 
     stringstream full_log;
 
-    void inline start_timer();
-    double inline partial_time();
-    double inline total_time();
+    void start_timer();
+    double partial_time();
+    double total_time();
     struct timeval* ldda_clock_start;
     struct timeval* ldda_clock_partial;
     struct timeval* ldda_clock_stop;

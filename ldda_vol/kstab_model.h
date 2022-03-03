@@ -54,6 +54,7 @@ public:
 
 protected:
     friend class LDDA;
+    friend class LDDAVolume;
 
     IO *instance;
     long fixed_cardinality;

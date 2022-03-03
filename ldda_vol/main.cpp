@@ -28,11 +28,12 @@ double RUN_KSTAB_WITH_TIME_LIMIT = 3600;
 bool RUN_STEEPEST_ASCENT_LDDA = false;
 bool WRITE_LDDA_LOG_FILE = true;
 
-bool WRITE_LDDA_FINAL_MULTIPLIERS = true;
-string FINAL_MULTILIERS_FILE_NAME = string("tmp_ldda_multipliers.dat");
-
 bool APPEND_SUMMARY_TO_DAT_FILE = true;
 string SUMMARY_FILE_NAME = string("xp3table.dat");
+
+bool WRITE_LDDA_FINAL_MULTIPLIERS = true;
+string FINAL_MULTILIERS_FILE_NAME = string("tmp_ldda_multipliers.dat");
+string VOLUME_CONFIG_FILE_NAME = string("ldda_vol.par");
 
 int main(int argc, char **argv)
 {
@@ -188,9 +189,15 @@ int main(int argc, char **argv)
                 }
             }
 
-            bool volume_complete = lagrangean->run_volume();
+            if (lagrangean->read_volume_config_file(VOLUME_CONFIG_FILE_NAME) == true)
+            {
+                bool volume_complete = lagrangean->run_volume();
 
-            // TO DO: add switches to run dual ascent and/or volume selectively            
+                // TO DO: add switches to run dual ascent and/or volume selectively
+                // TO DO: run volume only if ldda did not solve the problem
+            }
+
+
 
 
 

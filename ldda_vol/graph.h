@@ -65,6 +65,7 @@ private:
     friend class KStabModel;
     friend class StableSpanningTreeModel;
     friend class LDDA;
+    friend class LDDAVolume;
 
     long num_vertices;
     long num_edges;
