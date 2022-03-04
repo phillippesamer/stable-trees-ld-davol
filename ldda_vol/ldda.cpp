@@ -11,8 +11,8 @@ LDDA::LDDA(IO *instance, KStabModel *model)
     this->instance = instance;
     this->model = model;
     this->fixed_vars = vector< pair<long,bool> >();
-    this->bound_log = vector<long>();
-    this->solution_pool = vector< pair<long, vector<bool> > >();
+    this->bound_log = vector<double>();
+    this->solution_pool = vector< pair<double, vector<bool> > >();
     this->full_log = stringstream();
 
     this->runtime = -1;
@@ -25,22 +25,22 @@ LDDA::LDDA(IO *instance, KStabModel *model)
     this->contracted_edges_mask = vector<bool>(instance->graph->num_edges, false);
     this->removed_edges_mask = vector<bool>(instance->graph->num_edges, false);
 
-    original_weights = vector<long>(instance->graph->w);
+    original_weights = vector<double>(instance->graph->w);
 
     // initialize multipliers at half the original weights
-    multipliers_log = vector< vector<long> >();
-    multipliers_log.push_back( vector<long>(instance->graph->num_edges, 0) );
+    multipliers_log = vector< vector<double> >();
+    multipliers_log.push_back( vector<double>(instance->graph->num_edges, 0) );
     for (long idx=0; idx < instance->graph->num_edges; ++idx)
         multipliers_log[0][idx] = std::round(original_weights[idx] / 2);
 }
 
-LDDA::LDDA(IO *instance, KStabModel *model, vector<long> initial_multipliers)
+LDDA::LDDA(IO *instance, KStabModel *model, vector<double> initial_multipliers)
 {
     this->instance = instance;
     this->model = model;
     this->fixed_vars = vector< pair<long,bool> >();
-    this->bound_log = vector<long>();
-    this->solution_pool = vector< pair<long, vector<bool> > >();
+    this->bound_log = vector<double>();
+    this->solution_pool = vector< pair<double, vector<bool> > >();
     this->full_log = stringstream();
 
     this->runtime = -1;
@@ -53,10 +53,10 @@ LDDA::LDDA(IO *instance, KStabModel *model, vector<long> initial_multipliers)
     this->contracted_edges_mask = vector<bool>(instance->graph->num_edges, false);
     this->removed_edges_mask = vector<bool>(instance->graph->num_edges, false);
 
-    original_weights = vector<long>(instance->graph->w);
+    original_weights = vector<double>(instance->graph->w);
 
     // use given values as the initial multipliers
-    multipliers_log = vector< vector<long> >();
+    multipliers_log = vector< vector<double> >();
     multipliers_log.push_back(initial_multipliers);
 }
 
@@ -124,7 +124,7 @@ bool LDDA::dual_ascent(bool steepest_ascent)
                instance->graph->w.end(),
                multipliers_log[0].begin(),
                instance->graph->w.begin(),
-               minus<long>() );
+               minus<double>() );
 
     instance->graph->update_all_weights(instance->graph->w);
     model->update_all_weights(multipliers_log[0]);
@@ -169,7 +169,7 @@ bool LDDA::dual_ascent(bool steepest_ascent)
          * the LEMON data structure only!) are missing in later spanning trees,
          * so we include them here
          */
-        long contracted_edges_offset = 0;   // multiplier contributions in (w - \lambda)
+        double contracted_edges_offset = 0;   // multiplier contributions in (w - \lambda)
         for ( vector<long>::iterator it = contracted_edges.begin();
               it != contracted_edges.end(); ++it )
         {
@@ -237,8 +237,8 @@ bool LDDA::dual_ascent(bool steepest_ascent)
         if ( instance->test_stability(instance->graph->mst_vector) )
         {
             // store solution and its cost (wrt original weights)
-            long true_cost = 0;
-            long cost_in_other_subproblem = 0;
+            double true_cost = 0;
+            double cost_in_other_subproblem = 0;
             for (long idx=0; idx < instance->graph->num_edges; ++idx)
             {
                 // if x(idx) = 1
@@ -272,8 +272,8 @@ bool LDDA::dual_ascent(bool steepest_ascent)
         if ( instance->test_acyclic_kstab(model->solution_vector) )
         {
             // store solution and its cost (wrt original weights)
-            long true_cost = 0;
-            long cost_in_other_subproblem = 0;
+            double true_cost = 0;
+            double cost_in_other_subproblem = 0;
             for (long idx=0; idx < instance->graph->num_edges; ++idx)
             {
                 // if y(idx) = 1
@@ -317,8 +317,8 @@ bool LDDA::dual_ascent(bool steepest_ascent)
          */
 
         long chosen_direction = -1;
-        long chosen_adjustment = 0;
-        long chosen_bound_improvement = -1;
+        double chosen_adjustment = 0;
+        double chosen_bound_improvement = -1;
 
         unsigned long attempt = 0;
         long attempting_idx = (iter-1) % mismatch.size();  // starting direction
@@ -357,7 +357,7 @@ bool LDDA::dual_ascent(bool steepest_ascent)
                     #endif
 
                     // PROBING MST WITHOUT e TO DETERMINE \del^r_e
-                    pair<bool,long> probing_mst = edge_deletion_bound(current_direction);
+                    pair<bool,double> probing_mst = edge_deletion_bound(current_direction);
 
                     // the call above took care of the case where the probe is infeasible
                     if ( probing_mst.first == true)
@@ -371,7 +371,7 @@ bool LDDA::dual_ascent(bool steepest_ascent)
                         total_mst_time += instance->graph->probe_runtime;
 
                         // PROBING KSTAB FORCING e TO DETERMINE \delta^r_e
-                        pair<ModelStatus,long> probing_kstab
+                        pair<ModelStatus,double> probing_kstab
                             = vertex_fix_bound(current_direction);
 
                         // the call above took care of the case where the probe is infeasible
@@ -396,11 +396,11 @@ bool LDDA::dual_ascent(bool steepest_ascent)
                             // probings found feasible solutions => proceed to compute the bounds
 
                             // NB! adding the weight of contracted edges, which do not appear in Graph::mst_probing_var()
-                            long probing_mst_bound = probing_mst.second + (contracted_edges_weight - contracted_edges_offset);
-                            long probing_kstab_bound = probing_kstab.second;
+                            double probing_mst_bound = probing_mst.second + (contracted_edges_weight - contracted_edges_offset);
+                            double probing_kstab_bound = probing_kstab.second;
 
-                            long del = probing_mst_bound - instance->graph->mst_weight;
-                            long delta = probing_kstab_bound - model->solution_weight;
+                            double del = probing_mst_bound - instance->graph->mst_weight;
+                            double delta = probing_kstab_bound - model->solution_weight;
 
                             #ifdef DEBUG
                                 if (min(del,delta) < 0)
@@ -454,7 +454,7 @@ bool LDDA::dual_ascent(bool steepest_ascent)
                     #endif
 
                     // PROBING MST FORCING e TO DETERMINE \del^r_e
-                    pair<bool,long> probing_mst = edge_contraction_bound(current_direction);
+                    pair<bool,double> probing_mst = edge_contraction_bound(current_direction);
 
                     // contracting an edge does not make a connected graph disconnected
                     if (probing_mst.first == false)
@@ -477,7 +477,7 @@ bool LDDA::dual_ascent(bool steepest_ascent)
                     total_mst_time += instance->graph->probe_runtime;
 
                     // PROBING KSTAB WITHOUT e TO DETERMINE \delta^r_e
-                    pair<ModelStatus,long> probing_kstab
+                    pair<ModelStatus,double> probing_kstab
                         = vertex_deletion_bound(current_direction);
 
                     // the call above took care of the case where the probe is infeasible
@@ -502,11 +502,11 @@ bool LDDA::dual_ascent(bool steepest_ascent)
                         // probings found feasible solutions => proceed to compute the bounds
 
                         // NB! contracted edges do not appear in Graph::mst_probing_var()
-                        long probing_mst_bound = probing_mst.second + (contracted_edges_weight - contracted_edges_offset);
-                        long probing_kstab_bound = probing_kstab.second;
+                        double probing_mst_bound = probing_mst.second + (contracted_edges_weight - contracted_edges_offset);
+                        double probing_kstab_bound = probing_kstab.second;
 
-                        long del = probing_mst_bound - instance->graph->mst_weight;
-                        long delta = probing_kstab_bound - model->solution_weight;
+                        double del = probing_mst_bound - instance->graph->mst_weight;
+                        double delta = probing_kstab_bound - model->solution_weight;
 
                         #ifdef DEBUG
                             if (min(del,delta) < 0)
@@ -550,12 +550,12 @@ bool LDDA::dual_ascent(bool steepest_ascent)
 
         if (chosen_direction >= 0)
         {
-            vector<long> next_multipliers = vector<long>( multipliers_log.back() );
+            vector<double> next_multipliers = vector<double>( multipliers_log.back() );
             next_multipliers[chosen_direction] = next_multipliers[chosen_direction]
                                                  + chosen_adjustment;
             multipliers_log.push_back(next_multipliers);
 
-            long new_bound = bound_log.back() + chosen_bound_improvement;
+            double new_bound = bound_log.back() + chosen_bound_improvement;
             bound_log.push_back(new_bound);
 
             // update objective in mst subproblem: w_e - lambda_e
@@ -652,11 +652,11 @@ bool LDDA::dual_ascent(bool steepest_ascent)
     return true;
 }
 
-pair<bool,long> LDDA::edge_deletion_bound(long idx)
+pair<bool,double> LDDA::edge_deletion_bound(long idx)
 {
     /// probing mst without given edge to determine \del^r_e in Thm 4.3 (INOC)
 
-    pair<bool,long> probing_mst = instance->graph->mst_probing_var(idx, false);
+    pair<bool,double> probing_mst = instance->graph->mst_probing_var(idx, false);
 
     // probing var at 0 infeasible => fix var at 1 
     if (probing_mst.first == false)
@@ -672,20 +672,20 @@ pair<bool,long> LDDA::edge_deletion_bound(long idx)
     return probing_mst;
 }
 
-pair<bool,long> LDDA::edge_contraction_bound(long idx)
+pair<bool,double> LDDA::edge_contraction_bound(long idx)
 {
     /// probing mst forcing given edge to determine \del^r_e in Thm 4.2 (INOC)
 
-    pair<bool,long> probing_mst = instance->graph->mst_probing_var(idx, true);
+    pair<bool,double> probing_mst = instance->graph->mst_probing_var(idx, true);
 
     return probing_mst;
 }
 
-pair<ModelStatus,long> LDDA::vertex_deletion_bound(long idx)
+pair<ModelStatus,double> LDDA::vertex_deletion_bound(long idx)
 {
     /// probing kstab without a vertex to determine \delta^r_e in Thm 4.2 (INOC)
 
-    pair<ModelStatus,long> probing_kstab = model->probe_var(idx, false);
+    pair<ModelStatus,double> probing_kstab = model->probe_var(idx, false);
 
     // probing var at 0 infeasible => fix var at 1
     if (probing_kstab.first == IS_INFEASIBLE)
@@ -702,11 +702,11 @@ pair<ModelStatus,long> LDDA::vertex_deletion_bound(long idx)
     return probing_kstab;
 }
 
-pair<ModelStatus,long> LDDA::vertex_fix_bound(long idx)
+pair<ModelStatus,double> LDDA::vertex_fix_bound(long idx)
 {
     /// probing kstab forcing a vertex to determine \delta^r_e in Thm 4.3 (INOC)
 
-    pair<ModelStatus,long> probing_kstab = model->probe_var(idx, true);
+    pair<ModelStatus,double> probing_kstab = model->probe_var(idx, true);
 
     // probing var at 1 infeasible => fix var at 0
     if (probing_kstab.first == IS_INFEASIBLE)

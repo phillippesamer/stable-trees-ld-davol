@@ -65,7 +65,8 @@ bool IO::parse_input_file(string filename)
         for (long line_idx=0; line_idx<num_edges; ++line_idx)
         {
             // read edge terminal vertices and weight: i j w  (incidentally, i<j)
-            long i, j, w;
+            long i, j;
+            double w;
             
             input_fh >> i;
             graph->s.push_back(i);

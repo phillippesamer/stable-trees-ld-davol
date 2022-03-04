@@ -36,8 +36,8 @@ public:
     virtual ~KStabModel();
     
     int solve(bool);
-    long solution_weight;
-    long solution_dualbound;
+    double solution_weight;
+    double solution_dualbound;
     vector<bool> solution_vector;
     ModelStatus solution_status;
     double solution_runtime;
@@ -45,10 +45,10 @@ public:
     double runtime();
     void set_time_limit(double);
 
-    void update_single_weight(long,long);
-    void update_all_weights(vector<long>);
+    void update_single_weight(long,double);
+    void update_all_weights(vector<double>);
 
-    pair<ModelStatus,long> probe_var(long, bool);
+    pair<ModelStatus,double> probe_var(long, bool);
 
     vector<long> fix_var(long, bool);
 

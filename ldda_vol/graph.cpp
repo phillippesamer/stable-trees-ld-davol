@@ -17,7 +17,7 @@ Graph::Graph(long n, long m)
     lemon_graph_modified = false;
     num_vertices = n;
     num_edges = m;
-    mst_weight = numeric_limits<long>::max();   // flag for: mst not computed
+    mst_weight = numeric_limits<double>::max();   // flag for: mst not computed
 
     adj_list.reserve(n);
     adj_list.insert( adj_list.begin(), n, list<long>() );
@@ -83,14 +83,14 @@ void Graph::init_lemon()
         lemon_vertices.push_back(lemon_graph->addNode());
 
     lemon_edges.reserve(num_edges);
-    lemon_weight = new ListGraph::EdgeMap<long>(*lemon_graph);
+    lemon_weight = new ListGraph::EdgeMap<double>(*lemon_graph);
     lemon_edges_inverted_index = new ListGraph::EdgeMap<long>(*lemon_graph);
 
     // volume only
-    opposite_weights = new ListGraph::EdgeMap<long>(*lemon_graph);
+    opposite_weights = new ListGraph::EdgeMap<double>(*lemon_graph);
 }
 
-void Graph::update_single_weight(long idx, long new_weight)
+void Graph::update_single_weight(long idx, double new_weight)
 {
     // weight in the edge list
     this->w[idx] = new_weight;
@@ -100,11 +100,11 @@ void Graph::update_single_weight(long idx, long new_weight)
     (*lemon_weight)[e] = new_weight;
 }
 
-void Graph::update_all_weights(vector<long> new_weights)
+void Graph::update_all_weights(vector<double> new_weights)
 {
     // weight in the edge list
     this->w.clear();
-    this->w = vector<long>(new_weights);
+    this->w = vector<double>(new_weights);
 
     // weight in lemon's adjacency list
     for (long i=0; i<num_edges; ++i)
@@ -297,7 +297,7 @@ bool Graph::maxst()
         return true;
 }
 
-pair<bool,long> Graph::mst_probing_var(long probe_idx, bool probe_value)
+pair<bool,double> Graph::mst_probing_var(long probe_idx, bool probe_value)
 {
     /***
      * Returns the cost of an MST removing an edge (if probe_value = 0) or
@@ -324,7 +324,7 @@ pair<bool,long> Graph::mst_probing_var(long probe_idx, bool probe_value)
     #endif
 
     vector<ListGraph::Edge> mst_edges;
-    long mst_weight;
+    double mst_weight;
     Timer probing_timer;
     probing_timer.start();
 
@@ -355,7 +355,7 @@ pair<bool,long> Graph::mst_probing_var(long probe_idx, bool probe_value)
         copier.edgeCrossRef(edge_ref_new2old);
 
         // copy edge map
-        ListGraph::EdgeMap<long> weights_copy(graph_copy);
+        ListGraph::EdgeMap<double> weights_copy(graph_copy);
         copier.edgeMap(*this->lemon_weight, weights_copy);
 
         copier.run();   // actually executes the copy actions determined above
@@ -437,7 +437,7 @@ pair<bool,long> Graph::mst_probing_var(long probe_idx, bool probe_value)
 
     // 3. PREPARE RETURN VALUE
     bool result_is_tree = true;
-    long result_weight = mst_weight;
+    double result_weight = mst_weight;
 
     if (probe_value == true)
     {
@@ -504,7 +504,7 @@ bool Graph::lemon_test_adj(ListGraph &g, ListGraph::Node &x, ListGraph::Node &y)
 
 vector<ListGraph::Edge> 
 Graph::lemon_parallel_edges_if_contract(ListGraph &g,
-                                        ListGraph::EdgeMap<long> &w,
+                                        ListGraph::EdgeMap<double> &w,
                                         ListGraph::Node &x,
                                         ListGraph::Node &y)
 {

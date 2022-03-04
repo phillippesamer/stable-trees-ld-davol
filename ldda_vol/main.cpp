@@ -174,7 +174,7 @@ int main(int argc, char **argv)
                 if (mult_file.is_open())
                 {
                     long counter = 0;
-                    vector<long>::iterator it = lagrangean->multipliers_log.back().begin();
+                    vector<double>::iterator it = lagrangean->multipliers_log.back().begin();
                     while (it != lagrangean->multipliers_log.back().end())
                     {
                         mult_file << counter << " " << (*it) << endl;

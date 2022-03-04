@@ -4,6 +4,7 @@ fdata=data
 *dual_savefile=dual_final.txt
 *int_savefile=int_sol.txt
 h_iter=100
+volume_precision=14
 
 ifdual=0
 printflag=3

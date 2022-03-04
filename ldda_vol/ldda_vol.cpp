@@ -10,8 +10,10 @@
 LDDAVolume::LDDAVolume(IO *instance, KStabModel *model)
 : LDDA(instance, model)
 {
+    // might be overridden by config file
     this->initialized_mult = false;
     this->h_iter = 10;
+    this->volume_precision = 14;
 
     this->volume_runtime = -1;
     this->volume_iterations = 0;
@@ -50,28 +52,33 @@ bool LDDAVolume::read_volume_config_file(string filename)
 
     while (fgets(s, 500, file))
     {
-        const int len = strlen(s) - 1;
+        unsigned long len = strlen(s) - 1;
         if (s[len] == '\n')
             s[len] = 0;
         string ss = s;
 
         if (ss.find("dualfile") == 0)
         {
-            int j = ss.find("=");
-            int j1 = ss.length() - j + 1;
+            unsigned long j = ss.find("=");
+            long j1 = ss.length() - j + 1;
             dualfile = ss.substr(j+1, j1);
         }
         else if (ss.find("dual_savefile") == 0)
         {
-            int j = ss.find("=");
-            int j1 = ss.length() - j + 1;
+            unsigned long j = ss.find("=");
+            long j1 = ss.length() - j + 1;
             dual_savefile = ss.substr(j+1, j1);
         }
         else if (ss.find("h_iter") == 0)
         {
-            int i = ss.find("=");  
+            unsigned long i = ss.find("=");  
             h_iter = atol(&s[i+1]);
-        } 
+        }
+        else if (ss.find("volume_precision") == 0)
+        {
+            unsigned long i = ss.find("=");  
+            volume_precision = atoi(&s[i+1]);
+        }
     }
 
     fclose(file);
@@ -116,7 +123,7 @@ bool LDDAVolume::read_volume_config_file(string filename)
 
 bool LDDAVolume::run_volume()
 {
-    // adapting the original UFL example calling COIN-OR Vol
+    // adapted from the original UFL example calling COIN-OR Vol
 
     // TO DO: give maxweightST primal bound to volume
     // TO DO: set correct filename of the initial multipliers on .par file

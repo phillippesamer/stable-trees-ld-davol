@@ -5,8 +5,8 @@ KStabModel::KStabModel(IO *instance)
     this->instance = instance;
     this->fixed_cardinality = instance->graph->num_vertices-1;
 
-    this->solution_weight = numeric_limits<long>::max();
-    this->solution_dualbound = numeric_limits<long>::max();
+    this->solution_weight = numeric_limits<double>::max();
+    this->solution_dualbound = numeric_limits<double>::max();
     this->solution_status = STATUS_UNKNOWN;
     this->solution_runtime = -1;
 
@@ -120,18 +120,8 @@ int KStabModel::solve(bool logging)
             this->solution_status = AT_OPTIMUM;
             this->solution_vector.clear();
 
-            // the weights are integral, so the optimal value must also be
-            double optval = model->get(GRB_DoubleAttr_ObjVal);
-            this->solution_weight = (long) optval;
-            this->solution_dualbound = (long) optval;
-            if (floor(optval) - optval != 0)
-            {
-                this->solution_weight = std::floor(optval + ZERO_TOL);
-                this->solution_dualbound = std::floor(optval + ZERO_TOL);
-                cout << "NB: model optimal value is " << optval
-                     << " (not integral!); rounded to " << solution_weight
-                     << endl;
-            }
+            this->solution_weight = this->solution_dualbound 
+                                  = model->get(GRB_DoubleAttr_ObjVal);
 
             // save bool vector of this solution
 
@@ -165,8 +155,8 @@ int KStabModel::solve(bool logging)
         {
             this->solution_status = IS_INFEASIBLE;
 
-            this->solution_weight = numeric_limits<long>::max();
-            this->solution_dualbound = numeric_limits<long>::max();
+            this->solution_weight = numeric_limits<double>::max();
+            this->solution_dualbound = numeric_limits<double>::max();
             this->solution_vector.clear();
 
             cout << "Model infeasible! (runtime "
@@ -180,7 +170,7 @@ int KStabModel::solve(bool logging)
 
             this->solution_weight = (model->get(GRB_IntAttr_SolCount) > 0) ?
                                     model->get(GRB_DoubleAttr_ObjVal) :
-                                    numeric_limits<long>::max();
+                                    numeric_limits<double>::max();
             this->solution_dualbound = model->get(GRB_DoubleAttr_ObjBound);
 
             cout << "Time limit exceeded (" << solution_runtime << ")" << endl;
@@ -220,7 +210,7 @@ void KStabModel::set_time_limit(double tl)
     model->set(GRB_DoubleParam_TimeLimit, tl);
 }
 
-void KStabModel::update_single_weight(long idx, long new_weight)
+void KStabModel::update_single_weight(long idx, double new_weight)
 {
     x[idx].set(GRB_DoubleAttr_Obj, new_weight);
     model->update();
@@ -232,7 +222,7 @@ void KStabModel::update_single_weight(long idx, long new_weight)
     */
 }
 
-void KStabModel::update_all_weights(vector<long> new_weights)
+void KStabModel::update_all_weights(vector<double> new_weights)
 {
     GRBLinExpr objective_expression = 0;
 
@@ -241,15 +231,9 @@ void KStabModel::update_all_weights(vector<long> new_weights)
 
     model->setObjective(objective_expression, GRB_MINIMIZE);
     model->update();
-
-    /*
-    #ifdef DEBUG
-        model->write("kstab_3.lp");
-    #endif
-    */
 }
 
-pair<ModelStatus,long> KStabModel::probe_var(long probe_idx, bool probe_value)
+pair<ModelStatus,double> KStabModel::probe_var(long probe_idx, bool probe_value)
 {
     // change given var to continuous and update lb=ub=probe
     this->fix_var(probe_idx, probe_value);
@@ -267,28 +251,17 @@ pair<ModelStatus,long> KStabModel::probe_var(long probe_idx, bool probe_value)
 
     // save optimization status (optimal/infeasible) and result, if optimal
     ModelStatus status = STATUS_UNKNOWN;
-    long result = numeric_limits<long>::max();
+    double result = numeric_limits<double>::max();
 
     if (model->get(GRB_IntAttr_Status) == GRB_OPTIMAL)
     {
         status = AT_OPTIMUM;
-
-        // the weights are integral, so the optimal value must also be
-        double optval = model->get(GRB_DoubleAttr_ObjVal);
-        result = (long) optval;
-        if (floor(optval) - optval != 0)
-        {
-            result = std::floor(optval + ZERO_TOL);
-
-            cout << "NB: probe_var(idx=" << probe_idx << ", value=" << probe_value << ") ";
-            cout << "got optimal value " << optval << " (not integral!); rounded to "
-                 << result << endl;
-        }
+        result = model->get(GRB_DoubleAttr_ObjVal);
     }
     else if (model->get(GRB_IntAttr_Status) == GRB_INFEASIBLE)
     {
         status = IS_INFEASIBLE;
-        result = numeric_limits<long>::max();
+        result = numeric_limits<double>::max();
     }
     else
         cout << "Unexpected error: probe_var(idx=" << probe_idx << ", value=" << probe_value << ") got neither optimal nor infeasible model" << endl;

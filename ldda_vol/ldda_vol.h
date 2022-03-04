@@ -47,12 +47,13 @@ public:
 private:
     VOL_problem* volp;      // COIN-OR Vol problem description
 
-    string config_file;    // config file
-    bool initialized_mult; // true if the user defined an initial multipliers file
+    string config_file;     // config file
+    bool initialized_mult;  // true if the user defined an initial multipliers file
 
-    string dualfile;       // initial multipliers
-    string dual_savefile;  // file to save final multipliers
+    string dualfile;        // initial multipliers
+    string dual_savefile;   // file to save final multipliers
     long h_iter;            // heuristic runs after volume
+    int volume_precision;   // floating point precision between COIN-OR Vol and LDDA
 };
 
 #endif

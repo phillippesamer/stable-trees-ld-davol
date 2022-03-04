@@ -20,7 +20,7 @@ class LDDA
 {
 public:
     LDDA(IO*, KStabModel*);
-    LDDA(IO*, KStabModel*, vector<long>);
+    LDDA(IO*, KStabModel*, vector<double>);
     virtual ~LDDA();
 
     bool dual_ascent(bool);
@@ -30,9 +30,9 @@ public:
     long iter;
     double runtime;
 
-    vector< vector<long> > multipliers_log;  // lambda[iteration][var_index]
-    vector<long> bound_log;
-    vector< pair<long, vector<bool> > > solution_pool; // (weight, feasible point)
+    vector< vector<double> > multipliers_log;  // lambda[iteration][var_index]
+    vector<double> bound_log;
+    vector< pair<double, vector<bool> > > solution_pool; // (weight, feasible point)
 
     vector< pair<long,bool> > fixed_vars;   // vars fixed during execution
     IO* flush_fixes_to_instance();
@@ -43,15 +43,15 @@ protected:
     IO *instance;
     KStabModel *model;
 
-    pair<bool,long> edge_deletion_bound(long);
-    pair<bool,long> edge_contraction_bound(long);
-    pair<ModelStatus,long> vertex_deletion_bound(long);
-    pair<ModelStatus,long> vertex_fix_bound(long);
+    pair<bool,double> edge_deletion_bound(long);
+    pair<bool,double> edge_contraction_bound(long);
+    pair<ModelStatus,double> vertex_deletion_bound(long);
+    pair<ModelStatus,double> vertex_fix_bound(long);
     void fix_element_at_one_in_graph_and_model(long);
 
-    vector<long> original_weights;
+    vector<double> original_weights;
 
-    long contracted_edges_weight;
+    double contracted_edges_weight;
     vector<long> contracted_edges;
     vector<bool> contracted_edges_mask;
     vector<bool> removed_edges_mask;
