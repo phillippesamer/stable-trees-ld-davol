@@ -32,11 +32,35 @@ LDDAVolume::~LDDAVolume()
         delete volp;
 }
 
+void inline LDDAVolume::update_edge_weights_if_active(const vector<double>& new_weights)
+{
+    /***
+     * An earlier execution of LDDA might have fixed some elements, so this
+     * method is a safe substitute for Graph::update_all_weights(). The 
+     * corresponding method in KStabModel is safe as variables simply have
+     * their lower and upper bounds set to some fixed value
+     */
+
+    for (long idx = 0; idx < this->instance->graph->num_edges; ++idx)
+    {
+        if ( this->contracted_edges_mask.at(idx) == true || 
+             this->removed_edges_mask.at(idx) == true )
+        {
+            // will save the new weight in vector w but not try to update the
+            // lemon weight (which would be raise an error)
+
+            this->instance->graph->w[idx] = new_weights[idx];
+        }
+        else
+            this->instance->graph->update_single_weight(idx, new_weights[idx]);
+    }
+}
+
 bool LDDAVolume::read_volume_config_file(string filename)
 {
-    // original IO method in the UFL example file in COIN-OR Vol
+    // adapted from the UFL example file in COIN-OR Vol
 
-    // TO DO: update code for readability to use c++ api
+    // TO DO: update code with c++ api for readability
 
     this->config_file = filename;
 
@@ -89,7 +113,7 @@ bool LDDAVolume::read_volume_config_file(string filename)
     volp->psize = 2 * this->instance->graph->num_edges;  // # primal vars
     volp->dsize = this->instance->graph->num_edges;      // # dual vars
 
-    // check if the user defined initial multipliers
+    // check if user has set initial multipliers values
     // TO DO: replace this by a new constructor?
     if (this->dualfile.length() > 0)
     {
@@ -213,7 +237,7 @@ int LDDAVolume::solve_subproblem( const VOL_dvector& u,    // input: multipliers
                                   double& lcost,           // output: subproblem opt
                                   VOL_dvector& x,          // output: subproblem solution
                                   VOL_dvector& v,          // output: difference between rhs and lhs when plugging x into the relaxed constraints
-                                  double& pcost )          // output: objective val of x in the original problem
+                                  double& pcost )          // output: objective val of solution in the original problem
 {
     /***
      * ESSENTIAL USER HOOK (#2 OF 3) IN THE COIN-OR VOL FRAMEWORK
@@ -226,7 +250,7 @@ int LDDAVolume::solve_subproblem( const VOL_dvector& u,    // input: multipliers
 
     const long& m = instance->graph->num_edges;
 
-    // save current multipliers and new weights for the objectives of the subproblems
+    // save current multipliers and prepare new weights for subproblems' objectives
     vector<double> current_multipliers;
     vector<double> mst_weights;
     vector<double> kstab_weights;
@@ -239,94 +263,67 @@ int LDDAVolume::solve_subproblem( const VOL_dvector& u,    // input: multipliers
     }
     volume_multipliers_log.push_back(current_multipliers);
 
-    // 1. SOLVE MST SUBPROBLEM WITH WEIGHTS rc
+    // 1. SOLVE MST(G, w-lambda^r)
 
-    //instance->graph->update_all_weights(mst_weights);
+    update_edge_weights_if_active(mst_weights);
 
-    // need to account for contracted/deleted edges
+    if (instance->graph->mst() == false)
+    {
+        cout << endl << "UNEXPECTED ERROR: Graph::mst() failed "
+             << "- graph is not connected?" << endl
+             << "infeasible problem instance?" << endl;
 
+        return -1;
+    }
 
-    // 2. SOLVE KSTAB SUBPROBLEM WITH WEIGHTS rc
+    /* For separation of concerns purposes, edges contracted by LDDA (in
+     * the LEMON data structure only!) are missing in later spanning trees,
+     * so we include them here
+     */
+    for ( vector<long>::iterator it = contracted_edges.begin();
+          it != contracted_edges.end(); ++it )
+    {
+        instance->graph->mst_weight += mst_weights.at(*it);
+        instance->graph->mst_vector[*it] = true;
+    }
 
-    //model->update_all_weights(kstab_weights);
+    // 2. SOLVE KSTAB(\hat{G}, lambda^r)
 
-    // need to account for contracted/deleted edges
+    model->update_all_weights(kstab_weights);
 
+    if (model->solve(false) <= 0 || model->solution_status != AT_OPTIMUM)
+    {
+        cout << endl << "UNEXPECTED ERROR: KStabModel::solve() failed" 
+             << endl << "infeasible problem instance?" << endl;
 
+        return -1;
+    }
 
-    // 3. SAVE SUBPROBLEM SOLUTIONS IN SINGLE VOL_dvector x  
-    // need to account for contracted/deleted edges
+    // 3. SAVE SUBPROBLEM SOLUTIONS IN SINGLE VOL_dvector x
 
-
+    for (long idx=0; idx < m; ++idx)
+    {
+        x[idx] = instance->graph->mst_vector.at(idx);
+        x[m+idx] = model->solution_vector.at(idx);
+    }
 
     // 4. DETERMINE LAGRANGEAN OBJ (LCOST) AND ORIGINAL OBJ (PCOST)
-    // need to account for contracted/deleted edges
-    // volume_bound_log.push_back(lcost?);
 
+    lcost = instance->graph->mst_weight + model->solution_weight;
+    volume_bound_log.push_back(lcost);
 
+    // TO DO: should "the primal solution" be the x or y solution?
+    pcost = 0;
+    for (long idx=0; idx < m; ++idx)
+        if (instance->graph->mst_vector[idx] == true)
+            pcost += this->original_weights[idx];
 
-    // 5. DETERMINE MISMATCH VECTOR V =  "0 -(X-Y)" WITH THE SUBPROBLEM SOLUTIONS
-    // need to account for contracted/deleted edges
+    // 5. DETERMINE MISMATCH VECTOR V =  "0 - (X-Y)" FROM THE SUBPROBLEM SOLUTIONS
 
-
-
-    /*
-   int i,j;
-
-   lcost = 0.0;
-   for (i = 0; i < ncust; ++i) {
-      lcost += u[i];
-      v[i]=1;
-   }
-
-   VOL_ivector sol(nloc + nloc*ncust);
-
-   // produce a primal solution of the relaxed problem
-   const double * rdist = rc.v + nloc;
-   double sum;
-   int k=0, k1=0;
-   double value=0.;
-   int xi;
-   for ( i=0; i < nloc; ++i ) {
-     sum=0.;
-     for ( j=0; j < ncust; ++j ) {
-       if ( rdist[k]<0. ) sum+=rdist[k];
-       ++k;
-     }
-     if (fix[i]==0) xi=0;
-     else 
-       if (fix[i]==1) xi=1;
-       else 
-	 if ( fcost[i]+sum >= 0. ) xi=0;
-	 else xi=1;
-     sol[i]=xi;
-     value+=(fcost[i]+sum)*xi;
-     for ( j=0; j < ncust; ++j ) {
-       if ( rdist[k1] < 0. ) sol[nloc+k1]=xi;
-       else sol[nloc+k1]=0;
-       ++k1;
-     }
-   }
-
-   lcost += value;
-
-   pcost = 0.0;
-   x = 0.0;
-   for (i = 0; i < nloc; ++i) {
-     pcost += fcost[i] * sol[i];
-     x[i] = sol[i];
-   }
-
-   k = 0;
-   for ( i=0; i < nloc; i++){
-     for ( j=0; j < ncust; j++){
-       x[nloc+k]=sol[nloc+k];
-       pcost+= dist[k]*sol[nloc+k];
-       v[j]-=sol[nloc+k];
-       ++k;
-     }
-   }
-   */
+    for (long idx=0; idx < m; ++idx)
+    {
+        v[idx] = model->solution_vector.at(idx) - instance->graph->mst_vector.at(idx);
+    }
 
    return 0;   // return -1 to abort COIN-OR Vol
 }

@@ -74,8 +74,8 @@ private:
     vector< list<long> > adj_list;
 
     // edge list
-    vector<long> s;           // terminal node 1
-    vector<long> t;           // terminal node 2
+    vector<long> s;      // terminal vertex 1
+    vector<long> t;      // terminal vertex 2
     vector<double> w;    // edge weight
 
     // adjacency matrix storing edge indexes

@@ -1,6 +1,4 @@
-fdata=data
-*fdata=data
-*dualfile=dual_initial.txt
+*dualfile=tmp_ldda_multipliers.dat
 *dual_savefile=dual_final.txt
 *int_savefile=int_sol.txt
 h_iter=100

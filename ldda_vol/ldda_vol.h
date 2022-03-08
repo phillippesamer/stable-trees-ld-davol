@@ -54,6 +54,8 @@ private:
     string dual_savefile;   // file to save final multipliers
     long h_iter;            // heuristic runs after volume
     int volume_precision;   // floating point precision between COIN-OR Vol and LDDA
+
+    void inline update_edge_weights_if_active(const vector<double> &);
 };
 
 #endif
