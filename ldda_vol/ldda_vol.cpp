@@ -134,7 +134,11 @@ bool LDDAVolume::read_volume_config_file(string filename)
         cout << "initializing volume at:" << endl;
         for (int i = 0; i < volp->dsize; ++i)
         {
-            fscanf(file, "%i%lf", &idummy, &dinit[i]);
+            if (fscanf(file, "%i%lf", &idummy, &dinit[i]) != 2)
+            {
+                cout << "parsing error reading initial multipliers file: " << this->dualfile.c_str() << endl;
+                return false;
+            }
             cout << "lambda[" << i << "] = " << dinit[i] << ", ";
         }
         cout << endl;
@@ -152,6 +156,7 @@ bool LDDAVolume::run_volume()
     // TO DO: give maxweightST primal bound to volume
     // TO DO: set correct filename of the initial multipliers on .par file
 
+    this->volume_bound = numeric_limits<double>::min();
     this->start_timer();
 
     // invoke COIN-OR Vol engine
@@ -163,6 +168,8 @@ bool LDDAVolume::run_volume()
     }
     else
     {
+        this->volume_runtime = this->total_time();
+
         // recompute the violation of the fractional primal solution
         vector<double> mismatch = vector<double>(instance->graph->num_edges, 0);
         const VOL_dvector& psol = volp->psol;   // final primal solution
@@ -198,13 +205,9 @@ bool LDDAVolume::run_volume()
             this->heuristics(volp, psol, heur_val);
         }
         */
+
+        return true;
     }
-
-    this->volume_runtime = this->total_time();
-    cout << "volume bound: " << volp->value
-         << " (runtime " << fixed << volume_runtime << ")" << endl;
-
-    return true;
 }
 
 int LDDAVolume::compute_rc(const VOL_dvector& u, VOL_dvector& rc)
@@ -270,9 +273,10 @@ int LDDAVolume::solve_subproblem( const VOL_dvector& u,    // input: multipliers
     if (instance->graph->mst() == false)
     {
         cout << endl << "UNEXPECTED ERROR: Graph::mst() failed "
-             << "- graph is not connected?" << endl
+             << "- graph not connected?" << endl
              << "infeasible problem instance?" << endl;
 
+        this->problem_solved = true;
         return -1;
     }
 
@@ -293,8 +297,15 @@ int LDDAVolume::solve_subproblem( const VOL_dvector& u,    // input: multipliers
 
     if (model->solve(false) <= 0 || model->solution_status != AT_OPTIMUM)
     {
-        cout << endl << "UNEXPECTED ERROR: KStabModel::solve() failed" 
-             << endl << "infeasible problem instance?" << endl;
+        cout << endl << "UNEXPECTED ERROR: KStabModel::solve() failed" << endl;
+        if (model->solution_status == IS_INFEASIBLE)
+        {
+            cout << "infeasible problem instance" << endl;
+            this->problem_solved = true;
+        }
+        else
+            cout << "time limit exceeded?" << endl;
+
 
         return -1;
     }
@@ -311,11 +322,14 @@ int LDDAVolume::solve_subproblem( const VOL_dvector& u,    // input: multipliers
 
     lcost = instance->graph->mst_weight + model->solution_weight;
     volume_bound_log.push_back(lcost);
+    if (lcost > this->volume_bound)
+        this->volume_bound = lcost;
 
-    // TO DO: should "the primal solution" be the x or y solution?
+    // TO DO: could not decide whether "the primal solution" should be the x or
+    // y solution; preliminary tests gave the exact same behavior
     pcost = 0;
     for (long idx=0; idx < m; ++idx)
-        if (instance->graph->mst_vector[idx] == true)
+        if (model->solution_vector.at(idx) == true)
             pcost += this->original_weights[idx];
 
     // 5. DETERMINE MISMATCH VECTOR V =  "0 - (X-Y)" FROM THE SUBPROBLEM SOLUTIONS

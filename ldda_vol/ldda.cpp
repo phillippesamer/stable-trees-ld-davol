@@ -14,6 +14,7 @@ LDDA::LDDA(IO *instance, KStabModel *model)
     this->bound_log = vector<double>();
     this->solution_pool = vector< pair<double, vector<bool> > >();
     this->full_log = stringstream();
+    this->problem_solved = false;
 
     this->runtime = -1;
     this->ldda_clock_start = (struct timeval *) malloc(sizeof(struct timeval));
@@ -42,6 +43,7 @@ LDDA::LDDA(IO *instance, KStabModel *model, vector<double> initial_multipliers)
     this->bound_log = vector<double>();
     this->solution_pool = vector< pair<double, vector<bool> > >();
     this->full_log = stringstream();
+    this->problem_solved = false;
 
     this->runtime = -1;
     this->ldda_clock_start = (struct timeval *) malloc(sizeof(struct timeval));

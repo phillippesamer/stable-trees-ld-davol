@@ -29,7 +29,7 @@ bool RUN_STEEPEST_ASCENT_LDDA = false;
 bool WRITE_LDDA_LOG_FILE = true;
 
 bool APPEND_SUMMARY_TO_DAT_FILE = true;
-string SUMMARY_FILE_NAME = string("xp3table.dat");
+string SUMMARY_FILE_NAME = string("xp4table.dat");
 
 bool WRITE_LDDA_FINAL_MULTIPLIERS = true;
 string FINAL_MULTILIERS_FILE_NAME = string("tmp_ldda_multipliers.dat");
@@ -166,7 +166,7 @@ int main(int argc, char **argv)
 
             // volume extension
 
-            cout << "LDDA primal bound: " << instance->get_maxst_weight() << endl;
+            cout << "maxwst primal bound: " << instance->get_maxst_weight() << endl;
 
             if (WRITE_LDDA_FINAL_MULTIPLIERS)
             {
@@ -193,16 +193,18 @@ int main(int argc, char **argv)
             {
                 bool volume_complete = lagrangean->run_volume();
 
+                cout << endl << "volume bound: ";
+                if (volume_complete)
+                    cout << lagrangean->volume_bound;
+                else if (!volume_complete && lagrangean->problem_solved)   // infeasible
+                    cout << " x ";
+                else
+                    cout << " - ";
+                cout << " (runtime " << fixed << lagrangean->volume_runtime << ")" << endl;
+
                 // TO DO: add switches to run dual ascent and/or volume selectively
                 // TO DO: run volume only if ldda did not solve the problem
             }
-
-
-
-
-
-
-
 
             ///////////////////////////////////////////////////////////////////
 

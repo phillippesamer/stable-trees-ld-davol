@@ -481,12 +481,27 @@ carrabs_n100=(
 )
 
 
-for entry in "${carrabs_n100[@]}";
+#for entry in "${type1_kstab_ok[@]}";
+#do
+#    echo "$entry"
+#    #output=$(./ldda $entry | tail -n 1 >> "lp-new.out")
+#    output=$(./main $entry >> "$entry""_xp4.out")
+#    echo "$output"
+#done
+
+for entry in "${carrabs_n25[@]}";
 do
     echo "$entry"
     #output=$(./ldda $entry | tail -n 1 >> "lp-new.out")
-    output=$(./ldda $entry >> "$entry""_xp3.out")
+    output=$(./main $entry >> "$entry""_xp4.out")
     echo "$output"
 done
 
+for entry in "${carrabs_n50[@]}";
+do
+    echo "$entry"
+    #output=$(./ldda $entry | tail -n 1 >> "lp-new.out")
+    output=$(./main $entry >> "$entry""_xp4.out")
+    echo "$output"
+done
 

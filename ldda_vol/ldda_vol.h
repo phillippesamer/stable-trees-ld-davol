@@ -34,6 +34,7 @@ public:
     bool read_volume_config_file(string);
 
     bool run_volume();
+    double volume_bound;
     double volume_runtime;
     long volume_iterations;
     vector<double> volume_bound_log;
