@@ -23,6 +23,10 @@
 using namespace std;
 
 // execution switches
+bool RUN_LDDA = true;
+bool RUN_VOL = true;
+bool INITIALIZE_VOL_FROM_LDDA = true;
+
 double RUN_KSTAB_WITH_TIME_LIMIT = 3600;
 
 bool RUN_STEEPEST_ASCENT_LDDA = false;
@@ -30,10 +34,6 @@ bool WRITE_LDDA_LOG_FILE = true;
 
 bool APPEND_SUMMARY_TO_DAT_FILE = true;
 string SUMMARY_FILE_NAME = string("xp4table.dat");
-
-bool WRITE_LDDA_FINAL_MULTIPLIERS = true;
-string FINAL_MULTILIERS_FILE_NAME = string("tmp_ldda_multipliers.dat");
-string VOLUME_CONFIG_FILE_NAME = string("ldda_vol.par");
 
 int main(int argc, char **argv)
 {
@@ -56,12 +56,19 @@ int main(int argc, char **argv)
     // volume extension: primal bound from a max-weight mst
     instance->run_maxst();
 
-    // LP relaxation bound of the MSTCC natural IP formulation
+    // 1. LP RELAXATION BOUND OF THE MSTCC NATURAL IP FORMULATION
+
     StableSpanningTreeModel *lpr_model = new StableSpanningTreeModel(instance);
 
-    if ( lpr_model->solve_lp_relax(false) )
+    if ( !lpr_model->solve_lp_relax(false) )
     {
-        // trivial combinatorial bounds from min weight spanning tree and kstab
+        // lp relaxation infeasible
+        delete lpr_model;
+    }
+    else
+    {
+        // 2. TRIVIAL COMBINATORIAL BOUNDS FROM MIN WEIGHT SPANNING TREE AND KSTAB
+
         instance->run_mst();
 
         KStabModel *model = new KStabModel(instance);
@@ -116,101 +123,7 @@ int main(int argc, char **argv)
 
         delete lpr_model;
 
-        if (model->solution_status == AT_OPTIMUM)
-        {
-            // Lagrangean Decomposition bound
-            LDDAVolume *lagrangean = new LDDAVolume(instance, model);
-            bool ldda_complete = lagrangean->dual_ascent(RUN_STEEPEST_ASCENT_LDDA);
-
-            cout << endl << "ldda bound: ";
-            if (ldda_complete)
-                cout << lagrangean->bound_log.back();
-            else if (!ldda_complete && lagrangean->problem_solved)   // infeasible
-                cout << " x ";
-            else
-                cout << " - ";
-            cout << " (runtime " << fixed << lagrangean->runtime << ")" << endl;
-
-            if (WRITE_LDDA_LOG_FILE)
-            {
-                // write LDDA log file (input file name + "_ldda.log")
-                stringstream log = lagrangean->create_log();
-
-                char buffer[200];
-                int cx = snprintf(buffer, 200, "%s_ldda.log", argv[1]);
-                ofstream logfile(buffer);
-                if (cx>=0 && cx<200 && logfile.is_open())
-                {
-                    logfile << log.str();
-                    logfile.close();
-                }
-                else
-                {
-                    cout << log.str();
-                    cout << "ERROR: unable to write log file; dumped to screen" << endl;
-                }
-            }
-
-            if (APPEND_SUMMARY_TO_DAT_FILE)
-            {
-                if (ldda_complete)
-                    table_row << setw(10) << lagrangean->bound_log.back();
-                else if (!ldda_complete && lagrangean->problem_solved)   // infeasible
-                    table_row << setw(10) << " x ";
-                else
-                    table_row << setw(10) << " - ";
-                table_row << setw(5) << "  &  ";
-                table_row << setw(10) << fixed << lagrangean->runtime;
-                table_row << setw(5) << endl;
-            }
-
-            // volume extension
-
-            cout << "maxwst primal bound: " << instance->get_maxst_weight() << endl;
-
-            if (WRITE_LDDA_FINAL_MULTIPLIERS)
-            {
-                ofstream mult_file(FINAL_MULTILIERS_FILE_NAME.c_str(), ofstream::out);
-                if (mult_file.is_open())
-                {
-                    long counter = 0;
-                    vector<double>::iterator it = lagrangean->multipliers_log.back().begin();
-                    while (it != lagrangean->multipliers_log.back().end())
-                    {
-                        mult_file << counter << " " << (*it) << endl;
-                        ++counter;
-                        ++it;
-                    }
-                    mult_file.close();
-                }
-                else
-                {
-                    cout << "ERROR: unable to write dat file with final LDDA multipliers" << endl;
-                }
-            }
-
-            if (lagrangean->read_volume_config_file(VOLUME_CONFIG_FILE_NAME) == true)
-            {
-                bool volume_complete = lagrangean->run_volume();
-
-                cout << endl << "volume bound: ";
-                if (volume_complete)
-                    cout << lagrangean->volume_bound;
-                else if (!volume_complete && lagrangean->problem_solved)   // infeasible
-                    cout << " x ";
-                else
-                    cout << " - ";
-                cout << " (runtime " << fixed << lagrangean->volume_runtime << ")" << endl;
-
-                // TO DO: add switches to run dual ascent and/or volume selectively
-                // TO DO: run volume only if ldda did not solve the problem
-            }
-
-            ///////////////////////////////////////////////////////////////////
-
-            delete lagrangean;
-        }
-        else
+        if (model->solution_status != AT_OPTIMUM)
         {
             // kstab model could not be solved to optimality within time limit
 
@@ -222,7 +135,88 @@ int main(int argc, char **argv)
                 table_row << setw(5) << endl;
             }
         }
+        else
+        {
+            // lagrangean decomposition bound, approximated by dual ascent and/or volume
+            LDDAVolume *lagrangean = new LDDAVolume(instance, model);
 
+            if (RUN_LDDA)
+            {
+                // 3. LAGRANGEAN DECOMPOSITION BOUND: APPROXIMATION BY DUAL ASCENT
+
+                bool ldda_complete = lagrangean->dual_ascent(RUN_STEEPEST_ASCENT_LDDA);
+
+                cout << endl << "ldda bound: ";
+                if (ldda_complete)
+                    cout << lagrangean->bound_log.back();
+                else if (!ldda_complete && lagrangean->problem_solved)   // infeasible
+                    cout << " x ";
+                else
+                    cout << " - ";
+                cout << " (runtime " << fixed << lagrangean->runtime << ")" << endl << endl;
+
+                if (WRITE_LDDA_LOG_FILE)
+                {
+                    // write LDDA log file (input file name + "_ldda.log")
+                    stringstream log = lagrangean->create_log();
+
+                    char buffer[200];
+                    int cx = snprintf(buffer, 200, "%s_ldda.log", argv[1]);
+                    ofstream logfile(buffer);
+                    if (cx>=0 && cx<200 && logfile.is_open())
+                    {
+                        logfile << log.str();
+                        logfile.close();
+                    }
+                    else
+                    {
+                        cout << log.str();
+                        cout << "ERROR: unable to write log file; dumped to screen" << endl;
+                    }
+                }
+
+                if (APPEND_SUMMARY_TO_DAT_FILE)
+                {
+                    if (ldda_complete)
+                        table_row << setw(10) << lagrangean->bound_log.back();
+                    else if (!ldda_complete && lagrangean->problem_solved)   // infeasible
+                        table_row << setw(10) << " x ";
+                    else
+                        table_row << setw(10) << " - ";
+                    table_row << setw(5) << "  &  ";
+                    table_row << setw(10) << fixed << lagrangean->runtime;
+                    table_row << setw(5) << endl;
+                }
+
+            } // run ldda condition
+
+            if (RUN_VOL && !lagrangean->problem_solved)
+            {
+                // 4. LAGRANGEAN DECOMPOSITION BOUND: APPROXIMATION BY THE VOLUME ALGORITHM
+
+                cout << "maxwst primal bound: " << instance->get_maxst_weight() << endl;
+
+                if (RUN_LDDA && INITIALIZE_VOL_FROM_LDDA)
+                    lagrangean->initialize_multipliers( lagrangean->multipliers_log.back() );
+
+                bool volume_complete = lagrangean->run_volume();
+
+                cout << endl << "volume bound: ";
+                if (volume_complete)
+                    cout << lagrangean->volume_bound;
+                else if (!volume_complete && lagrangean->problem_solved)   // infeasible
+                    cout << " x ";
+                else
+                    cout << " - ";
+                cout << " (" << lagrangean->volume_iterations << " iterations, runtime " << fixed << lagrangean->volume_runtime << ")" << endl;
+
+            } // run volume condition
+
+            delete lagrangean;
+
+        } // kstab optimal condition
+
+        // finally: actually write summary output to file (facilitates experiments with many instances)
         if (APPEND_SUMMARY_TO_DAT_FILE)
         {
             ofstream xpfile(SUMMARY_FILE_NAME.c_str(), ofstream::app);
@@ -239,12 +233,8 @@ int main(int argc, char **argv)
         }
 
         delete model;
-    }
-    else
-    {
-        // LP relaxation infeasible
-        delete lpr_model;
-    }
+
+    } // lp relaxation condition
 
     delete instance;
     return 0;

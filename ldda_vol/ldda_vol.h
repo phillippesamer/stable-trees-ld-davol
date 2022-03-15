@@ -31,9 +31,9 @@ public:
     LDDAVolume(IO*, KStabModel*);
     virtual ~LDDAVolume();
 
-    bool read_volume_config_file(string);
-
+    bool initialize_multipliers(vector<double>&);
     bool run_volume();
+
     double volume_bound;
     double volume_runtime;
     long volume_iterations;
@@ -46,15 +46,9 @@ public:
     int heuristics(const VOL_problem&, const VOL_dvector&, double&);
 
 private:
-    VOL_problem* volp;      // COIN-OR Vol problem description
+    bool initial_multipliers_given;
 
-    string config_file;     // config file
-    bool initialized_mult;  // true if the user defined an initial multipliers file
-
-    string dualfile;        // initial multipliers
-    string dual_savefile;   // file to save final multipliers
-    long h_iter;            // heuristic runs after volume
-    int volume_precision;   // floating point precision between COIN-OR Vol and LDDA
+    VOL_problem* volp;   // COIN-OR Vol problem description
 
     void inline update_edge_weights_if_active(const vector<double> &);
 };

@@ -864,8 +864,7 @@ void LDDA::start_timer()
 
 double LDDA::partial_time()
 {
-    // returns the time elapsed since last call, and update partial timer
-    // (since the initialization, in the 1st execution)
+    // returns the time elapsed since last call
     struct timeval* tmp = (struct timeval *) malloc(sizeof(struct timeval));
     gettimeofday(tmp, 0);
 

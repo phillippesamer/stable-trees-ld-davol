@@ -7,20 +7,27 @@
 
 #include "ldda_vol.h"
 
+// algorithm setup switches
+
+string VOL_CONFIG_FILE = string("ldda_vol.par");
+bool USE_VOL_TIME_LIMIT = true;
+double VOL_TIME_LIMIT = 3600;
+
 LDDAVolume::LDDAVolume(IO *instance, KStabModel *model)
 : LDDA(instance, model)
 {
-    // might be overridden by config file
-    this->initialized_mult = false;
-    this->h_iter = 10;
-    this->volume_precision = 14;
-
     this->volume_runtime = -1;
     this->volume_iterations = 0;
     this->volume_bound_log = vector<double>();
     this->volume_multipliers_log = vector< vector<double> >();
 
-    this->volp = NULL;
+    // setup coin-or::vol inner representation of the problem
+    this->volp = new VOL_problem(VOL_CONFIG_FILE.c_str());
+    volp->psize = 2 * instance->graph->num_edges;  // # primal vars
+    volp->dsize = instance->graph->num_edges;      // # dual vars
+
+    // user may override by calling initialize_multipliers()
+    this->initial_multipliers_given = false;
 }
 
 LDDAVolume::~LDDAVolume()
@@ -28,8 +35,91 @@ LDDAVolume::~LDDAVolume()
     this->volume_bound_log.clear();
     this->volume_multipliers_log.clear();
 
-    if (volp != NULL)
-        delete volp;
+    delete volp;
+}
+
+bool LDDAVolume::initialize_multipliers(vector<double>& mult)
+{
+    /// start volume algorithm from the given dual point (lagrangean multipliers)
+
+    if (mult.size() != (unsigned) instance->graph->num_edges)
+    {
+        cout << endl << "WARNING: WRONG NUMBER OF INITIAL MULTIPLIERS "
+             << "(IGNORED AND USED VOLUME DEFAULT)" << endl << endl;
+
+        return false;
+    }
+
+    this->initial_multipliers_given = true;
+
+    VOL_dvector& init = volp->dsol;
+    init.allocate(volp->dsize);
+
+    cout << "initializing volume at:" << endl;
+    for (int i = 0; i < volp->dsize; ++i)
+    {
+        init[i] = mult.at(i);
+        cout << "lambda[" << i << "] = " << init[i] << ", ";
+    }
+    cout << endl;
+
+    return true;
+}
+
+bool LDDAVolume::run_volume()
+{
+    // adapted from the original UFL example calling COIN-OR Vol
+
+    // TO DO: give maxweightST primal bound to volume
+
+    this->volume_bound = numeric_limits<double>::min();
+    this->time_limit_exceeded = false;
+    this->start_timer();
+
+    // invoke COIN-OR Vol engine
+    long volp_status = volp->solve(*this, this->initial_multipliers_given);
+    this->volume_runtime = this->total_time();
+
+    if (volp_status >= 0 || time_limit_exceeded)
+    {
+        if (time_limit_exceeded)
+            cout << "volume time limit exceeded" << endl;
+        else
+            cout << "volume ended normally" << endl;
+
+        // recompute the violation of the fractional primal solution
+        vector<double> mismatch = vector<double>(instance->graph->num_edges, 0);
+        const VOL_dvector& psol = volp->psol;   // final primal solution
+
+        for (long idx=0; idx < instance->graph->num_edges; ++idx)
+        {
+            // mismatch[e] = x[e] - y[e]
+            mismatch[idx] = psol[idx] - psol[instance->graph->num_edges + idx];
+        }
+
+        double violation = 0.0;
+        for (long i=0; i < instance->graph->num_edges; ++i)
+            violation += fabs(mismatch[i]);
+        violation /= (instance->graph->num_edges);
+        cout << "average violation of final solution: " << violation << endl;
+
+        // TO DO: additional runs of the heuristics?
+        /*
+        double heur_val;
+        for (long i = 0; i < FINAL_HEURISTIC_RUNS; ++i)
+        {
+            heur_val = numeric_limits<double>::max();
+            this->heuristics(volp, psol, heur_val);
+        }
+        */
+
+        return true;
+    }
+    else
+    {
+        cout << "volume ended prematurely" << endl;
+        return false;
+    }
 }
 
 void inline LDDAVolume::update_edge_weights_if_active(const vector<double>& new_weights)
@@ -56,160 +146,6 @@ void inline LDDAVolume::update_edge_weights_if_active(const vector<double>& new_
     }
 }
 
-bool LDDAVolume::read_volume_config_file(string filename)
-{
-    // adapted from the UFL example file in COIN-OR Vol
-
-    // TO DO: update code with c++ api for readability
-
-    this->config_file = filename;
-
-    // 1. OPTIONAL USER PARAMETERS
-
-    char s[500];
-    FILE * file = fopen(filename.c_str(), "r");
-    if (!file)
-    {
-        cout << "could not open volume config file: " << filename << endl;
-        return false;
-    }
-
-    while (fgets(s, 500, file))
-    {
-        unsigned long len = strlen(s) - 1;
-        if (s[len] == '\n')
-            s[len] = 0;
-        string ss = s;
-
-        if (ss.find("dualfile") == 0)
-        {
-            unsigned long j = ss.find("=");
-            long j1 = ss.length() - j + 1;
-            dualfile = ss.substr(j+1, j1);
-        }
-        else if (ss.find("dual_savefile") == 0)
-        {
-            unsigned long j = ss.find("=");
-            long j1 = ss.length() - j + 1;
-            dual_savefile = ss.substr(j+1, j1);
-        }
-        else if (ss.find("h_iter") == 0)
-        {
-            unsigned long i = ss.find("=");  
-            h_iter = atol(&s[i+1]);
-        }
-        else if (ss.find("volume_precision") == 0)
-        {
-            unsigned long i = ss.find("=");  
-            volume_precision = atoi(&s[i+1]);
-        }
-    }
-
-    fclose(file);
-
-    // 2. PREPARE COIN-OR VOL INNER REPRESENTATION OF THE PROBLEM
-
-    this->volp = new VOL_problem(filename.c_str());
-    volp->psize = 2 * this->instance->graph->num_edges;  // # primal vars
-    volp->dsize = this->instance->graph->num_edges;      // # dual vars
-
-    // check if user has set initial multipliers values
-    // TO DO: replace this by a new constructor?
-    if (this->dualfile.length() > 0)
-    {
-        initialized_mult = true;
-
-        // read dual solution
-        VOL_dvector& dinit = volp->dsol;
-        dinit.allocate(volp->dsize);
-
-        FILE *file = fopen(this->dualfile.c_str(), "r");
-        if (!file)
-        {
-            cout << "could not open initial multipliers file: " << this->dualfile.c_str() << endl;
-            return false;
-        }
-
-        int idummy;
-        cout << "initializing volume at:" << endl;
-        for (int i = 0; i < volp->dsize; ++i)
-        {
-            if (fscanf(file, "%i%lf", &idummy, &dinit[i]) != 2)
-            {
-                cout << "parsing error reading initial multipliers file: " << this->dualfile.c_str() << endl;
-                return false;
-            }
-            cout << "lambda[" << i << "] = " << dinit[i] << ", ";
-        }
-        cout << endl;
-
-        fclose(file);
-    }
-
-    return true;
-}
-
-bool LDDAVolume::run_volume()
-{
-    // adapted from the original UFL example calling COIN-OR Vol
-
-    // TO DO: give maxweightST primal bound to volume
-    // TO DO: set correct filename of the initial multipliers on .par file
-
-    this->volume_bound = numeric_limits<double>::min();
-    this->start_timer();
-
-    // invoke COIN-OR Vol engine
-    if (volp->solve(*this, this->initialized_mult) < 0)
-    {
-        cout << "COIN-OR Vol::solve() failed" << endl;
-        this->volume_runtime = total_time();
-        return false;
-    }
-    else
-    {
-        this->volume_runtime = this->total_time();
-
-        // recompute the violation of the fractional primal solution
-        vector<double> mismatch = vector<double>(instance->graph->num_edges, 0);
-        const VOL_dvector& psol = volp->psol;   // final primal solution
-
-        for (long idx=0; idx < instance->graph->num_edges; ++idx)
-        {
-            // mismatch[e] = x[e] - y[e]
-            mismatch[idx] = psol[idx] - psol[instance->graph->num_edges + idx];
-        }
-
-        double violation = 0.0;
-        for (long i=0; i < instance->graph->num_edges; ++i)
-            violation += fabs(mismatch[i]);
-        violation /= (instance->graph->num_edges);
-        cout << "average violation of final solution: " << violation << endl;
-
-        if (this->dual_savefile.length() > 0)
-        {
-            // save dual solution
-            FILE* file = fopen(this->dual_savefile.c_str(), "w");
-            const VOL_dvector& u = volp->dsol;
-            for (int i = 0; i < u.size(); ++i)
-                fprintf(file, "%8i  %f\n", i+1, u[i]);
-            fclose(file);
-        }
-
-        // TO DO: additional runs of the heuristics?
-        /*
-        double heur_val;
-        for (long i = 0; i < this->h_iter; ++i)
-        {
-            heur_val = DBL_MAX;
-            this->heuristics(volp, psol, heur_val);
-        }
-        */
-
-        return true;
-    }
-}
-
 int LDDAVolume::compute_rc(const VOL_dvector& u, VOL_dvector& rc)
 {
     /*** 
@@ -220,6 +156,18 @@ int LDDAVolume::compute_rc(const VOL_dvector& u, VOL_dvector& rc)
      * See INOC Section 3 for the Lagrangean Decomposition formulation under
      * consideration for finding stable spanning trees.
      */
+
+    // 1. check time limit before starting a new volume iteration
+
+    if (USE_VOL_TIME_LIMIT && total_time() > VOL_TIME_LIMIT)
+    {
+        this->time_limit_exceeded = true;
+        return -1;
+    }
+
+    this->volume_iterations++;
+
+    // 2. determine variable coefficients in the objective vector
 
     const long& m = instance->graph->num_edges;
 
@@ -248,8 +196,6 @@ int LDDAVolume::solve_subproblem( const VOL_dvector& u,    // input: multipliers
      * See INOC Section 3 for the Lagrangean Decomposition formulation under
      * consideration for finding stable spanning trees.
      */
-
-    this->volume_iterations++;
 
     const long& m = instance->graph->num_edges;
 
@@ -304,8 +250,7 @@ int LDDAVolume::solve_subproblem( const VOL_dvector& u,    // input: multipliers
             this->problem_solved = true;
         }
         else
-            cout << "time limit exceeded?" << endl;
-
+            cout << "kstab time limit exceeded?" << endl;
 
         return -1;
     }
