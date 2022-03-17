@@ -2,7 +2,7 @@
 
 // algorithm setup switches
 bool USE_LDDA_TIME_LIMIT = true;
-double LDDA_TIME_LIMIT = 3600;
+double LDDA_TIME_LIMIT = 1800;
 bool SUBPROBLEM_TIMES_WITHOUT_PROBING = true;  // log information
 double TIME_LOG_INTERVAL = 300;
 
@@ -91,7 +91,7 @@ bool LDDA::dual_ascent(bool steepest_ascent)
      */
 
     // log format
-    cout << "LDDA: Lagrangean Decomposition based Dual Ascent" << endl;
+    cout << "LDDA: Lagrangean Decomposition bound approximation by Dual Ascent" << endl;
 
     cout << setw(63) << "";
     cout << setw(9) << "mst  ";
@@ -808,7 +808,7 @@ stringstream LDDA::create_log()
     /// prepare log of the LDDA execution as a stringstream object
     stringstream log;
 
-    log << "LDDA: Lagrangean Decomposition based Dual Ascent" << endl;
+    log << "LDDA: Lagrangean Decomposition bound approximation by Dual Ascent" << endl;
 
     log << setw(63) << "";
     log << setw(9) << "mst  ";

@@ -42,7 +42,11 @@ bool IO::parse_input_file(string filename)
         }
         else
             instance_id.assign(filename);
-        
+
+        // trimmed instance id: contents after last slash and before the last dot
+        size_t last_slash_pos = filename.find_last_of("/\\");
+        instance_id_trimmed = filename.substr(last_slash_pos+1, dot_pos-1 - last_slash_pos);
+
         // 3 lines for cardinalities of vertex, edge and conflict sets
         long num_vertices, num_edges;
         input_fh >> num_vertices;

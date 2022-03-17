@@ -41,15 +41,16 @@ public:
     bool test_acyclic(vector<bool> &);
     bool test_acyclic_kstab(vector<bool> &);
 
+    // instance data
+    long num_conflicts;
+    string instance_id;
+    string instance_id_trimmed;
+
 private:
     friend class KStabModel;
     friend class StableSpanningTreeModel;
     friend class LDDA;
     friend class LDDAVolume;
-
-    // instance data
-    long num_conflicts;
-    string instance_id;
 
     Graph *graph;  // different representations of the original graph
 

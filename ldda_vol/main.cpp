@@ -27,13 +27,19 @@ bool RUN_LDDA = true;
 bool RUN_VOL = true;
 bool INITIALIZE_VOL_FROM_LDDA = true;
 
-double RUN_KSTAB_WITH_TIME_LIMIT = 3600;
+double RUN_KSTAB_WITH_TIME_LIMIT = 1800;
 
 bool RUN_STEEPEST_ASCENT_LDDA = false;
 bool WRITE_LDDA_LOG_FILE = true;
 
-bool APPEND_SUMMARY_TO_DAT_FILE = true;
-string SUMMARY_FILE_NAME = string("xp4table.dat");
+bool WRITE_XP_FILE = true;
+bool WRITE_XP_FILE_SIMPLE_BOUNDS = true;
+bool WRITE_XP_FILE_LDDA_COLUMNS = false;
+bool WRITE_XP_FILE_VOL_COLUMNS = true;
+bool WRITE_XP_FILE_VOL_TIME_INCLUDING_LDDA = true;
+string XP_FILE_NAME = string("xp5table.dat");
+
+string trim_zeros(double, int);
 
 int main(int argc, char **argv)
 {
@@ -53,8 +59,8 @@ int main(int argc, char **argv)
         return 0;
     }
 
-    // volume extension: primal bound from a max-weight mst
-    instance->run_maxst();
+    // if running heuristics in volume: give primal bound from a max-weight mst
+    // instance->run_maxst();
 
     // 1. LP RELAXATION BOUND OF THE MSTCC NATURAL IP FORMULATION
 
@@ -93,45 +99,66 @@ int main(int argc, char **argv)
 
         // summary output file (for experiments with many instances)
         stringstream table_row;
-        if (APPEND_SUMMARY_TO_DAT_FILE)
+        if (WRITE_XP_FILE)
         {
             table_row << left;
-            table_row << setw(50) << argv[1];
-            table_row << setw(5) << "  &  ";
-            if (model->solution_status == AT_OPTIMUM)
-                table_row << setw(25) << model->solution_weight;
-            else if (model->solution_status == IS_INFEASIBLE)
-                table_row << setw(25) << "x";
-            else
+            table_row << setw(30) << instance->instance_id_trimmed;
+            table_row << setw(5) << "  &&  ";
+
+            if (WRITE_XP_FILE_SIMPLE_BOUNDS)
             {
-                stringstream tmp_str;
-                tmp_str << model->solution_weight << " ?";
-                table_row << setw(25) << tmp_str.str();
+                if (model->solution_status == AT_OPTIMUM)
+                    table_row << setw(25) << model->solution_weight;
+                else if (model->solution_status == IS_INFEASIBLE)
+                    table_row << setw(25) << "x";
+                else
+                {
+                    stringstream tmp_str;
+                    tmp_str << model->solution_weight << " ?";
+                    table_row << setw(25) << tmp_str.str();
+                }
+                table_row << setw(5) << "  &  ";
+                table_row << setw(10) << fixed << setprecision(1) << model->solution_runtime;
+                table_row << setw(5) << "  &&  ";
+                table_row << setw(10) << fixed << setprecision(0) << instance->get_mst_weight();
+                table_row << setw(5) << "  &  ";
+                table_row << setw(10) << fixed << setprecision(1) << instance->get_mst_runtime();
+                table_row << setw(5) << "  &&  ";
+                table_row << setw(10) << trim_zeros(lpr_model->lp_bound, 4);
+                table_row << setw(5) << "  &  ";
+                table_row << setw(10) << fixed << setprecision(1) << lpr_model->lp_runtime;
+                table_row << setw(5) << "  &&  ";
             }
-            table_row << setw(5) << "  &  ";
-            table_row << setw(10) << fixed << model->solution_runtime;
-            table_row << setw(5) << "  &  ";
-            table_row << setw(10) << instance->get_mst_weight();
-            table_row << setw(5) << "  &  ";
-            table_row << setw(10) << fixed << instance->get_mst_runtime();
-            table_row << setw(5) << "  &  ";
-            table_row << setw(10) << lpr_model->lp_bound;
-            table_row << setw(5) << "  &  ";
-            table_row << setw(10) << fixed << lpr_model->lp_runtime;
-            table_row << setw(5) << "  &  ";
         }
 
+        double lp_bound_bkp = lpr_model->lp_bound;
         delete lpr_model;
 
         if (model->solution_status != AT_OPTIMUM)
         {
             // kstab model could not be solved to optimality within time limit
 
-            if (APPEND_SUMMARY_TO_DAT_FILE)
+            if (WRITE_XP_FILE)
             {
-                table_row << setw(10) << " - ";
-                table_row << setw(5) << "  &  ";
-                table_row << setw(10) << " - ";
+                if (WRITE_XP_FILE_LDDA_COLUMNS)
+                {
+                    table_row << setw(10) << " - ";
+                    table_row << setw(5) << "  &  ";
+                    table_row << setw(10) << " - ";
+                    table_row << setw(5) << "  &&  ";
+                }
+
+                if (WRITE_XP_FILE_VOL_COLUMNS)
+                {
+                    table_row << setw(10) << " - ";
+                    table_row << setw(5) << "  &  ";
+                    table_row << setw(10) << " - ";
+                    table_row << setw(5) << "  &  ";
+                    table_row << setw(10) << " - ";
+                    table_row << setw(5) << "  &  ";
+                    table_row << setw(10) << "   \\\\  ";
+                }
+
                 table_row << setw(5) << endl;
             }
         }
@@ -175,17 +202,17 @@ int main(int argc, char **argv)
                     }
                 }
 
-                if (APPEND_SUMMARY_TO_DAT_FILE)
+                if (WRITE_XP_FILE && WRITE_XP_FILE_LDDA_COLUMNS)
                 {
                     if (ldda_complete)
-                        table_row << setw(10) << lagrangean->bound_log.back();
+                        table_row << setw(10) << trim_zeros(lagrangean->bound_log.back(), 4);
                     else if (!ldda_complete && lagrangean->problem_solved)   // infeasible
                         table_row << setw(10) << " x ";
                     else
                         table_row << setw(10) << " - ";
                     table_row << setw(5) << "  &  ";
-                    table_row << setw(10) << fixed << lagrangean->runtime;
-                    table_row << setw(5) << endl;
+                    table_row << setw(10) << fixed << setprecision(1) << lagrangean->runtime;
+                    table_row << setw(5) << "  &&  ";
                 }
 
             } // run ldda condition
@@ -194,7 +221,7 @@ int main(int argc, char **argv)
             {
                 // 4. LAGRANGEAN DECOMPOSITION BOUND: APPROXIMATION BY THE VOLUME ALGORITHM
 
-                cout << "maxwst primal bound: " << instance->get_maxst_weight() << endl;
+                // cout << "maxwst primal bound: " << instance->get_maxst_weight() << endl;
 
                 if (RUN_LDDA && INITIALIZE_VOL_FROM_LDDA)
                     lagrangean->initialize_multipliers( lagrangean->multipliers_log.back() );
@@ -208,7 +235,25 @@ int main(int argc, char **argv)
                     cout << " x ";
                 else
                     cout << " - ";
-                cout << " (" << lagrangean->volume_iterations << " iterations, runtime " << fixed << lagrangean->volume_runtime << ")" << endl;
+                cout << " (" << lagrangean->volume_iterations << " iterations, runtime " << fixed << lagrangean->volume_runtime << ")" << endl << endl;
+
+                if (WRITE_XP_FILE && WRITE_XP_FILE_VOL_COLUMNS)
+                {
+                    if (volume_complete)
+                        table_row << setw(10) << trim_zeros(lagrangean->volume_bound, 4);
+                    else if (!volume_complete && lagrangean->problem_solved)   // infeasible
+                        table_row << setw(10) << " x ";
+                    else
+                        table_row << setw(10) << " - ";
+                    table_row << setw(5) << "  &  ";
+                    double ldda_vol_runtime_on_xp = (WRITE_XP_FILE_VOL_TIME_INCLUDING_LDDA) ? (lagrangean->runtime + lagrangean->volume_runtime) : lagrangean->volume_runtime;
+                    table_row << setw(10) << fixed << setprecision(1) << ldda_vol_runtime_on_xp;
+                    table_row << setw(5) << "  &  ";
+                    table_row << setw(10) << trim_zeros(100*(lagrangean->volume_bound - lp_bound_bkp) / lp_bound_bkp , 2);
+                    table_row << setw(5) << "  &  ";
+                    table_row << setw(10) << "   \\\\  ";
+                    table_row << setw(5) << endl;
+                }
 
             } // run volume condition
 
@@ -217,9 +262,9 @@ int main(int argc, char **argv)
         } // kstab optimal condition
 
         // finally: actually write summary output to file (facilitates experiments with many instances)
-        if (APPEND_SUMMARY_TO_DAT_FILE)
+        if (WRITE_XP_FILE)
         {
-            ofstream xpfile(SUMMARY_FILE_NAME.c_str(), ofstream::app);
+            ofstream xpfile(XP_FILE_NAME.c_str(), ofstream::app);
             if (xpfile.is_open())
             {
                 xpfile << table_row.str();
@@ -238,4 +283,22 @@ int main(int argc, char **argv)
 
     delete instance;
     return 0;
+}
+
+string trim_zeros(double value, int p)
+{
+    stringstream ss;
+    ss << fixed << setprecision(p) << value;
+    string str = ss.str();
+
+    if(str.find('.') != string::npos)
+    {
+        // remove trailing zeros
+        str = str.substr(0, str.find_last_not_of('0')+1);
+
+        // remove the decimal point if it is now the last character
+        if(str.find('.') == str.size()-1)
+            str = str.substr(0, str.size()-1);
+    }
+    return str;
 }

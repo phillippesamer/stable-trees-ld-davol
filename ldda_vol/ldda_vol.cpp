@@ -11,7 +11,7 @@
 
 string VOL_CONFIG_FILE = string("ldda_vol.par");
 bool USE_VOL_TIME_LIMIT = true;
-double VOL_TIME_LIMIT = 3600;
+double VOL_TIME_LIMIT = 1800;
 
 LDDAVolume::LDDAVolume(IO *instance, KStabModel *model)
 : LDDA(instance, model)
@@ -42,6 +42,8 @@ bool LDDAVolume::initialize_multipliers(vector<double>& mult)
 {
     /// start volume algorithm from the given dual point (lagrangean multipliers)
 
+    cout << "(LDDA-)Vol: Lagrangean Decomposition bound approximation by the Volume Algorithm" << endl << endl;
+
     if (mult.size() != (unsigned) instance->graph->num_edges)
     {
         cout << endl << "WARNING: WRONG NUMBER OF INITIAL MULTIPLIERS "
@@ -55,22 +57,17 @@ bool LDDAVolume::initialize_multipliers(vector<double>& mult)
     VOL_dvector& init = volp->dsol;
     init.allocate(volp->dsize);
 
-    cout << "initializing volume at:" << endl;
+    cout << "initializing volume at given multipliers" << endl;
     for (int i = 0; i < volp->dsize; ++i)
-    {
         init[i] = mult.at(i);
-        cout << "lambda[" << i << "] = " << init[i] << ", ";
-    }
-    cout << endl;
 
     return true;
 }
 
 bool LDDAVolume::run_volume()
 {
-    // adapted from the original UFL example calling COIN-OR Vol
-
-    // TO DO: give maxweightST primal bound to volume
+    if (!this->initial_multipliers_given)
+        cout << "(LDDA-)Vol: Lagrangean Decomposition bound approximation by the Volume Algorithm" << endl << endl;
 
     this->volume_bound = numeric_limits<double>::min();
     this->time_limit_exceeded = false;
@@ -88,14 +85,13 @@ bool LDDAVolume::run_volume()
             cout << "volume ended normally" << endl;
 
         // recompute the violation of the fractional primal solution
+        // (adapted from the original UFL example calling COIN-OR Vol)
         vector<double> mismatch = vector<double>(instance->graph->num_edges, 0);
         const VOL_dvector& psol = volp->psol;   // final primal solution
 
+        // mismatch[e] = x[e] - y[e]
         for (long idx=0; idx < instance->graph->num_edges; ++idx)
-        {
-            // mismatch[e] = x[e] - y[e]
             mismatch[idx] = psol[idx] - psol[instance->graph->num_edges + idx];
-        }
 
         double violation = 0.0;
         for (long i=0; i < instance->graph->num_edges; ++i)
@@ -103,7 +99,7 @@ bool LDDAVolume::run_volume()
         violation /= (instance->graph->num_edges);
         cout << "average violation of final solution: " << violation << endl;
 
-        // TO DO: additional runs of the heuristics?
+        // TO DO: if using heuristics, consider additional runs here
         /*
         double heur_val;
         for (long i = 0; i < FINAL_HEURISTIC_RUNS; ++i)
@@ -303,6 +299,8 @@ int LDDAVolume::heuristics( const VOL_problem& p,
     // TO DO: check if solution is integral, and then feasible
     // TO DO: (MAYBE) if solution is not integral, round some of the
     // mismatching vars and check feasibility
+
+    // TO DO: if running heuristics, give maxweightST primal bound to volume
 
     return 0;   // return -1 to abort COIN-OR Vol
 }
