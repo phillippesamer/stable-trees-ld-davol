@@ -33,11 +33,11 @@ bool RUN_STEEPEST_ASCENT_LDDA = false;
 bool WRITE_LDDA_LOG_FILE = true;
 
 bool WRITE_XP_FILE = true;
-bool WRITE_XP_FILE_SIMPLE_BOUNDS = true;
-bool WRITE_XP_FILE_LDDA_COLUMNS = false;
-bool WRITE_XP_FILE_VOL_COLUMNS = true;
-bool WRITE_XP_FILE_VOL_TIME_INCLUDING_LDDA = true;
-string XP_FILE_NAME = string("xp5table.dat");
+bool WRITE_XP_SECTION_SIMPLE_BOUNDS = true;
+bool WRITE_XP_SECTION_LDDA_COLUMNS = false;
+bool WRITE_XP_SECTION_VOL_COLUMNS = true;
+bool WRITE_XP_VOL_TIME_INCLUDING_LDDA = true;
+string XP_FILE_NAME = string("xp6table.dat");
 
 string trim_zeros(double, int);
 
@@ -105,7 +105,7 @@ int main(int argc, char **argv)
             table_row << setw(30) << instance->instance_id_trimmed;
             table_row << setw(5) << "  &&  ";
 
-            if (WRITE_XP_FILE_SIMPLE_BOUNDS)
+            if (WRITE_XP_SECTION_SIMPLE_BOUNDS)
             {
                 if (model->solution_status == AT_OPTIMUM)
                     table_row << setw(25) << model->solution_weight;
@@ -140,7 +140,7 @@ int main(int argc, char **argv)
 
             if (WRITE_XP_FILE)
             {
-                if (WRITE_XP_FILE_LDDA_COLUMNS)
+                if (WRITE_XP_SECTION_LDDA_COLUMNS)
                 {
                     table_row << setw(10) << " - ";
                     table_row << setw(5) << "  &  ";
@@ -148,7 +148,7 @@ int main(int argc, char **argv)
                     table_row << setw(5) << "  &&  ";
                 }
 
-                if (WRITE_XP_FILE_VOL_COLUMNS)
+                if (WRITE_XP_SECTION_VOL_COLUMNS)
                 {
                     table_row << setw(10) << " - ";
                     table_row << setw(5) << "  &  ";
@@ -202,7 +202,7 @@ int main(int argc, char **argv)
                     }
                 }
 
-                if (WRITE_XP_FILE && WRITE_XP_FILE_LDDA_COLUMNS)
+                if (WRITE_XP_FILE && WRITE_XP_SECTION_LDDA_COLUMNS)
                 {
                     if (ldda_complete)
                         table_row << setw(10) << trim_zeros(lagrangean->bound_log.back(), 4);
@@ -217,42 +217,60 @@ int main(int argc, char **argv)
 
             } // run ldda condition
 
-            if (RUN_VOL && !lagrangean->problem_solved)
+            if (RUN_VOL)
             {
-                // 4. LAGRANGEAN DECOMPOSITION BOUND: APPROXIMATION BY THE VOLUME ALGORITHM
-
-                // cout << "maxwst primal bound: " << instance->get_maxst_weight() << endl;
-
-                if (RUN_LDDA && INITIALIZE_VOL_FROM_LDDA)
-                    lagrangean->initialize_multipliers( lagrangean->multipliers_log.back() );
-
-                bool volume_complete = lagrangean->run_volume();
-
-                cout << endl << "volume bound: ";
-                if (volume_complete)
-                    cout << lagrangean->volume_bound;
-                else if (!volume_complete && lagrangean->problem_solved)   // infeasible
-                    cout << " x ";
-                else
-                    cout << " - ";
-                cout << " (" << lagrangean->volume_iterations << " iterations, runtime " << fixed << lagrangean->volume_runtime << ")" << endl << endl;
-
-                if (WRITE_XP_FILE && WRITE_XP_FILE_VOL_COLUMNS)
+                if (lagrangean->problem_solved)
                 {
-                    if (volume_complete)
-                        table_row << setw(10) << trim_zeros(lagrangean->volume_bound, 4);
-                    else if (!volume_complete && lagrangean->problem_solved)   // infeasible
+                    // no need to run the volume algorithm - dual ascent proved infeasibility
+                    if (WRITE_XP_FILE && WRITE_XP_SECTION_VOL_COLUMNS)
+                    {
                         table_row << setw(10) << " x ";
+                        table_row << setw(5) << "  &  ";
+                        table_row << setw(10) << fixed << setprecision(1) << lagrangean->runtime;
+                        table_row << setw(5) << "  &  ";
+                        table_row << setw(10) << " x ";
+                        table_row << setw(5) << "  &  ";
+                        table_row << setw(10) << "   \\\\  ";
+                        table_row << setw(5) << endl;
+                    }
+                }
+                else
+                {
+                    // 4. LAGRANGEAN DECOMPOSITION BOUND: APPROXIMATION BY THE VOLUME ALGORITHM
+
+                    // cout << "maxwst primal bound: " << instance->get_maxst_weight() << endl;
+
+                    if (RUN_LDDA && INITIALIZE_VOL_FROM_LDDA)
+                        lagrangean->initialize_multipliers( lagrangean->multipliers_log.back() );
+
+                    bool volume_complete = lagrangean->run_volume();
+
+                    cout << endl << "volume bound: ";
+                    if (volume_complete)
+                        cout << lagrangean->volume_bound;
+                    else if (!volume_complete && lagrangean->problem_solved)   // infeasible
+                        cout << " x ";
                     else
-                        table_row << setw(10) << " - ";
-                    table_row << setw(5) << "  &  ";
-                    double ldda_vol_runtime_on_xp = (WRITE_XP_FILE_VOL_TIME_INCLUDING_LDDA) ? (lagrangean->runtime + lagrangean->volume_runtime) : lagrangean->volume_runtime;
-                    table_row << setw(10) << fixed << setprecision(1) << ldda_vol_runtime_on_xp;
-                    table_row << setw(5) << "  &  ";
-                    table_row << setw(10) << trim_zeros(100*(lagrangean->volume_bound - lp_bound_bkp) / lp_bound_bkp , 2);
-                    table_row << setw(5) << "  &  ";
-                    table_row << setw(10) << "   \\\\  ";
-                    table_row << setw(5) << endl;
+                        cout << " - ";
+                    cout << " (" << lagrangean->volume_iterations << " iterations, runtime " << fixed << lagrangean->volume_runtime << ")" << endl << endl;
+
+                    if (WRITE_XP_FILE && WRITE_XP_SECTION_VOL_COLUMNS)
+                    {
+                        if (volume_complete)
+                            table_row << setw(10) << trim_zeros(lagrangean->volume_bound, 4);
+                        else if (!volume_complete && lagrangean->problem_solved)   // infeasible
+                            table_row << setw(10) << " x ";
+                        else
+                            table_row << setw(10) << " - ";
+                        table_row << setw(5) << "  &  ";
+                        double ldda_vol_runtime_on_xp = (WRITE_XP_VOL_TIME_INCLUDING_LDDA) ? (lagrangean->runtime + lagrangean->volume_runtime) : lagrangean->volume_runtime;
+                        table_row << setw(10) << fixed << setprecision(1) << ldda_vol_runtime_on_xp;
+                        table_row << setw(5) << "  &  ";
+                        table_row << setw(10) << trim_zeros(100*(lagrangean->volume_bound - lp_bound_bkp) / lp_bound_bkp , 2);
+                        table_row << setw(5) << "  &  ";
+                        table_row << setw(10) << "   \\\\  ";
+                        table_row << setw(5) << endl;
+                    }
                 }
 
             } // run volume condition
