@@ -155,12 +155,15 @@ int LDDAVolume::compute_rc(const VOL_dvector& u, VOL_dvector& rc)
 
     // 1. check time limit before starting a new volume iteration
 
-    if (USE_VOL_TIME_LIMIT && total_time() > VOL_TIME_LIMIT)
+    double current_elapsed_time = total_time();
+
+    if (USE_VOL_TIME_LIMIT && current_elapsed_time > VOL_TIME_LIMIT)
     {
         this->time_limit_exceeded = true;
         return -1;
     }
 
+    cout << " \t\t\t\t\t runtime: " << current_elapsed_time << endl << endl;
     this->volume_iterations++;
 
     // 2. determine variable coefficients in the objective vector

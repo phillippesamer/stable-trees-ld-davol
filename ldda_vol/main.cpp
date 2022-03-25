@@ -37,7 +37,9 @@ bool WRITE_XP_SECTION_SIMPLE_BOUNDS = true;
 bool WRITE_XP_SECTION_LDDA_COLUMNS = false;
 bool WRITE_XP_SECTION_VOL_COLUMNS = true;
 bool WRITE_XP_VOL_TIME_INCLUDING_LDDA = true;
-string XP_FILE_NAME = string("xp6table.dat");
+bool WRITE_XP_ROUNDING_BOUNDS_UP = true;
+bool WRITE_XP_TAKING_MAX_OVER_KSTAB_MST_AND_LDDA_VOL = true;
+string XP_FILE_NAME = string("xp7table.dat");
 
 string trim_zeros(double, int);
 
@@ -58,6 +60,21 @@ int main(int argc, char **argv)
         delete instance;
         return 0;
     }
+
+    // 0. PREPROCESSING
+    /*
+    if (instance->preprocess() == false)
+    {
+        // problem solved with preprocessing algorithm
+
+        // TO DO: PROPER OUTPUT FOR XP_FILE
+
+        cout << "preprocessing solved the problem -- TO DO: improve output for xp_file" << endl;
+
+        delete instance;
+        return 0;
+    }
+    */
 
     // if running heuristics in volume: give primal bound from a max-weight mst
     // instance->run_maxst();
@@ -81,6 +98,11 @@ int main(int argc, char **argv)
         model->set_time_limit(RUN_KSTAB_WITH_TIME_LIMIT);
         model->solve(true);
 
+        double lp_bound_for_xp = WRITE_XP_ROUNDING_BOUNDS_UP ? 
+            ceil(lpr_model->lp_bound) : lpr_model->lp_bound;
+        double kstab_bound_for_xp = model->solution_weight;
+        double mst_bound_for_xp = instance->get_mst_weight();
+
         cout << "_____________________________________________________________________________" << endl << endl;
 
         cout << "kstab bound: " << model->solution_dualbound
@@ -103,7 +125,8 @@ int main(int argc, char **argv)
         {
             table_row << left;
             table_row << setw(30) << instance->instance_id_trimmed;
-            table_row << setw(5) << "  &&  ";
+            table_row << setw(5) << "  &  ";
+            table_row << setw(20) << "  &&  ";
 
             if (WRITE_XP_SECTION_SIMPLE_BOUNDS)
             {
@@ -124,14 +147,14 @@ int main(int argc, char **argv)
                 table_row << setw(5) << "  &  ";
                 table_row << setw(10) << fixed << setprecision(1) << instance->get_mst_runtime();
                 table_row << setw(5) << "  &&  ";
-                table_row << setw(10) << trim_zeros(lpr_model->lp_bound, 4);
+                table_row << setw(10) << trim_zeros(lp_bound_for_xp, 4);
                 table_row << setw(5) << "  &  ";
                 table_row << setw(10) << fixed << setprecision(1) << lpr_model->lp_runtime;
                 table_row << setw(5) << "  &&  ";
             }
         }
 
-        double lp_bound_bkp = lpr_model->lp_bound;
+
         delete lpr_model;
 
         if (model->solution_status != AT_OPTIMUM)
@@ -182,6 +205,16 @@ int main(int argc, char **argv)
                     cout << " - ";
                 cout << " (runtime " << fixed << lagrangean->runtime << ")" << endl << endl;
 
+                double ldda_bound_for_xp = WRITE_XP_ROUNDING_BOUNDS_UP ?
+                    ceil(lagrangean->bound_log.back()) : lagrangean->bound_log.back();
+
+                if (WRITE_XP_TAKING_MAX_OVER_KSTAB_MST_AND_LDDA_VOL)
+                {
+                    // printing the strongest between the kstab, mst, and ldda bounds
+                    ldda_bound_for_xp = max(ldda_bound_for_xp, kstab_bound_for_xp);
+                    ldda_bound_for_xp = max(ldda_bound_for_xp, mst_bound_for_xp);
+                }
+
                 if (WRITE_LDDA_LOG_FILE)
                 {
                     // write LDDA log file (input file name + "_ldda.log")
@@ -205,13 +238,15 @@ int main(int argc, char **argv)
                 if (WRITE_XP_FILE && WRITE_XP_SECTION_LDDA_COLUMNS)
                 {
                     if (ldda_complete)
-                        table_row << setw(10) << trim_zeros(lagrangean->bound_log.back(), 4);
+                        table_row << setw(10) << trim_zeros(ldda_bound_for_xp, 4);
                     else if (!ldda_complete && lagrangean->problem_solved)   // infeasible
                         table_row << setw(10) << " x ";
                     else
                         table_row << setw(10) << " - ";
                     table_row << setw(5) << "  &  ";
                     table_row << setw(10) << fixed << setprecision(1) << lagrangean->runtime;
+                    table_row << setw(5) << "  &  ";
+                    table_row << setw(10) << trim_zeros(100*(ldda_bound_for_xp - lp_bound_for_xp) / lp_bound_for_xp , 2);
                     table_row << setw(5) << "  &&  ";
                 }
 
@@ -254,10 +289,20 @@ int main(int argc, char **argv)
                         cout << " - ";
                     cout << " (" << lagrangean->volume_iterations << " iterations, runtime " << fixed << lagrangean->volume_runtime << ")" << endl << endl;
 
+                    double vol_bound_for_xp = WRITE_XP_ROUNDING_BOUNDS_UP ?
+                        ceil(lagrangean->volume_bound) : lagrangean->volume_bound;
+
+                    if (WRITE_XP_TAKING_MAX_OVER_KSTAB_MST_AND_LDDA_VOL)
+                    {
+                        // printing the strongest between the kstab, mst, and vol bounds
+                        vol_bound_for_xp = max(vol_bound_for_xp, kstab_bound_for_xp);
+                        vol_bound_for_xp = max(vol_bound_for_xp, mst_bound_for_xp);
+                    }
+
                     if (WRITE_XP_FILE && WRITE_XP_SECTION_VOL_COLUMNS)
                     {
                         if (volume_complete)
-                            table_row << setw(10) << trim_zeros(lagrangean->volume_bound, 4);
+                            table_row << setw(10) << trim_zeros(vol_bound_for_xp, 4);
                         else if (!volume_complete && lagrangean->problem_solved)   // infeasible
                             table_row << setw(10) << " x ";
                         else
@@ -266,7 +311,7 @@ int main(int argc, char **argv)
                         double ldda_vol_runtime_on_xp = (WRITE_XP_VOL_TIME_INCLUDING_LDDA) ? (lagrangean->runtime + lagrangean->volume_runtime) : lagrangean->volume_runtime;
                         table_row << setw(10) << fixed << setprecision(1) << ldda_vol_runtime_on_xp;
                         table_row << setw(5) << "  &  ";
-                        table_row << setw(10) << trim_zeros(100*(lagrangean->volume_bound - lp_bound_bkp) / lp_bound_bkp , 2);
+                        table_row << setw(10) << trim_zeros(100*(vol_bound_for_xp - lp_bound_for_xp) / lp_bound_for_xp , 2);
                         table_row << setw(5) << "  &  ";
                         table_row << setw(10) << "   \\\\  ";
                         table_row << setw(5) << endl;

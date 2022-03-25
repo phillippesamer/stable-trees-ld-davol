@@ -1,6 +1,6 @@
 ifdual=0
 printflag=1
-printinvl=50
+printinvl=1
 heurinvl=10
 
 greentestinvl=1
