@@ -45,14 +45,16 @@ string trim_zeros(double, int);
 
 int main(int argc, char **argv)
 {
-    if (argc != 2)
+    if (argc < 2 || argc > 3)
     {
-        cout << "usage: \t" << argv[0] << " [input file]" << endl << endl;
+        cout << "usage: \t" << argv[0] << " [input file path] [optimum (optional)]" << endl << endl;
+        cout << "the optimal value (when available) is only used to print how tight the Lagrangean bound is" << endl << endl;
         return 0;
     }
 
     IO* instance = new IO();
-    
+    bool instance_opt_given = (argc == 3);
+
     // parse given input file and look for errors in it
     if (instance->parse_input_file(string(argv[1])) == false)
     {
@@ -126,7 +128,10 @@ int main(int argc, char **argv)
             table_row << left;
             table_row << setw(30) << instance->instance_id_trimmed;
             table_row << setw(5) << "  &  ";
-            table_row << setw(20) << "  &&  ";
+
+            if (instance_opt_given)
+                table_row << setw(10) << argv[2];
+            table_row << setw(6) << "  &&  ";
 
             if (WRITE_XP_SECTION_SIMPLE_BOUNDS)
             {
@@ -142,15 +147,15 @@ int main(int argc, char **argv)
                 }
                 table_row << setw(5) << "  &  ";
                 table_row << setw(10) << fixed << setprecision(1) << model->solution_runtime;
-                table_row << setw(5) << "  &&  ";
+                table_row << setw(6) << "  &&  ";
                 table_row << setw(10) << fixed << setprecision(0) << instance->get_mst_weight();
                 table_row << setw(5) << "  &  ";
                 table_row << setw(10) << fixed << setprecision(1) << instance->get_mst_runtime();
-                table_row << setw(5) << "  &&  ";
+                table_row << setw(6) << "  &&  ";
                 table_row << setw(10) << trim_zeros(lp_bound_for_xp, 4);
                 table_row << setw(5) << "  &  ";
                 table_row << setw(10) << fixed << setprecision(1) << lpr_model->lp_runtime;
-                table_row << setw(5) << "  &&  ";
+                table_row << setw(6) << "  &&  ";
             }
         }
 
@@ -168,7 +173,7 @@ int main(int argc, char **argv)
                     table_row << setw(10) << " - ";
                     table_row << setw(5) << "  &  ";
                     table_row << setw(10) << " - ";
-                    table_row << setw(5) << "  &&  ";
+                    table_row << setw(6) << "  &&  ";
                 }
 
                 if (WRITE_XP_SECTION_VOL_COLUMNS)
@@ -313,6 +318,13 @@ int main(int argc, char **argv)
                         table_row << setw(5) << "  &  ";
                         table_row << setw(10) << trim_zeros(100*(vol_bound_for_xp - lp_bound_for_xp) / lp_bound_for_xp , 2);
                         table_row << setw(5) << "  &  ";
+
+                        if (instance_opt_given)
+                        {
+                            double opt = atof(argv[2]);
+                            table_row << setw(10) << trim_zeros(100*(opt - vol_bound_for_xp) / opt , 1);
+                        }
+
                         table_row << setw(10) << "   \\\\  ";
                         table_row << setw(5) << endl;
                     }
