@@ -51,6 +51,7 @@ private:
     friend class StableSpanningTreeModel;
     friend class LDDA;
     friend class LDDAVolume;
+    friend class CutGenerator;
 
     Graph *graph;  // different representations of the original graph
 

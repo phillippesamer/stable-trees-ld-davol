@@ -1,263 +1,175 @@
-#include "mstcc_model.h"
 #include "cut_generator.h"
 
-#define ORTHOGONALITY_TOL_IN_LPR 0.1
-#define SEC_VIOLATION_TOL_IN_LPR 0.0001
-#define SEC_SEPARATION_PRECISION_IN_LPR 14   // <= 14 without changing everything to long double (which gurobi ignores)
+// kinds of cuts
+#define ADD_USER_CUTS 1
+#define ADD_LAZY_CNTRS 2
+#define ADD_STD_CNTRS 3
 
-// algorithm setup switches
+#define ORTHOGONALITY_TOL_IN_IP 0.1
+#define SEC_VIOLATION_TOL_IN_IP 0.0001
+#define SEC_SEPARATION_PRECISION_IN_IP 14   // <= 14 without changing everything to long double (which gurobi ignores)
 
-int  SEC_STRATEGY_IN_LPR = ALL_CUTS;
-bool STORE_CUT_POOL_IN_LPR = false;
+/// algorithm setup switches
 
-double TIME_LIMIT_IN_IP = 3600;
+bool CUTS_AT_ROOT_ONLY = false;
 
-// set the next 3 options to true to compute the LP relaxation faster
-bool USE_DEGREE_CONSTRAINTS_A_PRIORI = false;
-bool USE_FAST_FOLKLORE_CUT_IN_LPR = false;
-bool USE_FAST_INTEGER_CUT_IN_LPR = true;
+bool USE_FAST_FOLKLORE_CUT_IN_IP = true;
+bool USE_FAST_INTEGER_CUT_IN_IP = true;
 
-StableSpanningTreeModel::StableSpanningTreeModel(IO *instance)
-: KStabModel(instance)
+int  SEC_STRATEGY = ALL_CUTS;
+bool STORE_CUT_POOL_IN_IP = false;
+
+
+CutGenerator::CutGenerator(GRBVar *x_vars, IO *instance, cut_statistics *stats)
 {
-    this->lp_bound = this->lp_runtime = -1;
-    stats = new cut_statistics();
+    this->x_vars = x_vars;
+    this->instance = instance;
+    this->stats = stats;
 
-    if (USE_DEGREE_CONSTRAINTS_A_PRIORI)
-    {
-        // enforce a priori that all vertices should have degree >= 1
-        // (implied by SEC), to make LP relaxation faster
-        ostringstream cname;
-        for (long u=0; u < instance->graph->num_vertices; u++)
-        {
-            GRBLinExpr cut_edges = 0;
-            for (list<long>::iterator it = instance->graph->adj_list[u].begin();
-                it != instance->graph->adj_list[u].end(); ++it)
-            {
-                long edge_idx = instance->graph->index_matrix[u][*it];
-                cut_edges += x[edge_idx];
-            }
-
-            cname.str("");
-            cname << "MSTCC_degree_" << u;
-            model->addConstr(cut_edges >= 1, cname.str());
-        }
-        model->update();
-    }
+    this->sec_counter = 0;
+    this->num_vars = instance->graph->num_edges;
 }
 
-StableSpanningTreeModel::~StableSpanningTreeModel()
+CutGenerator::~CutGenerator()
 {
-    delete stats;
+    /// TO DO: NOTHING HERE?
 }
 
-int StableSpanningTreeModel::solve(bool logging)
+void CutGenerator::callback()
 {
     /***
-     * Polymorphic override of the kstab solve() method.
-     * Finds a min weight solution of the natural IP formulation for MSTCC:
-     * kstab in the conflict graph + subtour elimination constraints (SEC) in
-     * the original one. Returns the number of solutions found, while further
-     * information is stored in object fields.
+     * The actual callback method within the solver. Currently, only used for 
+     * adding cuts/lazy constraints dynamically.
      */
 
     try
     {
-        /*
-        // turn off all built-in cut generators?
-        model->set(GRB_IntParam_Cuts, 0);
+        // callback from the search at a given MIP node: including USER CUTS
+        if (where == GRB_CB_MIPNODE)
+        {
+            // node relaxation solution must be available at the current node
+            if (this->getIntInfo(GRB_CB_MIPNODE_STATUS) != GRB_OPTIMAL)
+                return;
 
-        // turn off all preprocessing and heuristics?
-        model->set(GRB_IntParam_Presolve, 0);
-        model->set(GRB_IntParam_PrePasses, 0);
-        model->set(GRB_DoubleParam_PreSOS1BigM, 0);
-        model->set(GRB_DoubleParam_PreSOS2BigM, 0);
-        model->set(GRB_IntParam_PreSparsify, 0);
-        model->set(GRB_IntParam_PreCrush, 1);
-        model->set(GRB_IntParam_DualReductions, 0);
-        model->set(GRB_IntParam_Aggregate, 0);
+            // generate cuts only at root node?
+            if (CUTS_AT_ROOT_ONLY && getDoubleInfo(GRB_CB_MIPNODE_NODCNT) != 0.)
+                return;
 
-        model->set(GRB_DoubleParam_Heuristics, 0);
-        */
+            x_val = this->getNodeRel(x_vars, num_vars);
 
-        if (logging == true)
-            model->set(GRB_IntParam_OutputFlag, 1);
-        else
-            model->set(GRB_IntParam_OutputFlag, 0);
+            // find violated subtour eliminaton constraints (if any) and add cuts to the model
+            separate_sec(ADD_USER_CUTS);
 
-        model->set(GRB_DoubleParam_TimeLimit, TIME_LIMIT_IN_IP);
+            delete[] x_val;
+        }
 
-        // should disable presolve reductions that affect user cuts
-        model->set(GRB_IntParam_PreCrush, 1);
+        // callback from a new MIP incumbent: including LAZY CONSTRAINTS
+        else if (where == GRB_CB_MIPSOL)
+        {
+            x_val = this->getSolution(x_vars, num_vars);
 
-        // must set parameter indicating presence of lazy constraints
-        model->set(GRB_IntParam_LazyConstraints, 1);
+            // find violated subtour eliminaton constraints (if any) and add cuts to the model
+            separate_sec(ADD_LAZY_CNTRS);
 
-        // set callback to separate SECs and solve IP
-        CutGenerator cutgen = CutGenerator(x, instance, stats);
-        model->setCallback(&cutgen);
-        model->optimize();
-
-        return this->save_optimization_status();
+            delete[] x_val;
+        }
     }
-    catch(GRBException e)
+    catch (GRBException e)
     {
-        cout << "Error code = " << e.getErrorCode() << endl;
+        cout << "Error " << e.getErrorCode() << " during callback: ";
         cout << e.getMessage() << endl;
-        return 0;
     }
-    catch(...)
+    catch (...)
     {
-        cout << "Unexpected error during optimization inside StableSpanningTreeModel::solve()" << endl;
-        return 0;
+        cout << "Unexpected error during callback" << endl;
     }
-
 }
 
-bool StableSpanningTreeModel::solve_lp_relax(bool logging)
+
+void CutGenerator::separate_lpr()
 {
-    /***
-     * Solves the lp relaxation of the natural IP formulation for MSTCC:
-     * kstab in the conflict graph + subtour elimination constraints (SEC) in
-     * the original one. Returns true if the bound was computed, and false if
-     * the LP formulation is already infeasible.
-     */
+    /// Interface to be used when solving the LP relaxation only.
 
     try
     {
-        // turn off all gurobi cut generators
-        model->set(GRB_IntParam_Cuts, 0);
+        x_val = new double[num_vars];
+        for (long i=0; i < num_vars; ++i)
+            x_val[i] = x_vars[i].get(GRB_DoubleAttr_X);
 
-        /*
-        // turn off all prepreprocessing?
-        model->set(GRB_IntParam_Presolve, 0);
-        model->set(GRB_DoubleParam_PreSOS1BigM, 0);
-        model->set(GRB_DoubleParam_PreSOS2BigM, 0);
-        model->set(GRB_IntParam_PreSparsify, 0);
-        model->set(GRB_IntParam_PreCrush, 1);
-        model->set(GRB_IntParam_DualReductions, 0);
-        model->set(GRB_IntParam_Aggregate, 0);
-        */
+        // find violated subtour eliminaton constraints (if any) and add cuts to the model
+        separate_sec(ADD_STD_CNTRS);
 
-        if (logging == true)
-            model->set(GRB_IntParam_OutputFlag, 1);
-        else
-            model->set(GRB_IntParam_OutputFlag, 0);
-
-        // make vars continuous
-        for (long i=0; i < instance->graph->num_edges; i++)
-            x[i].set(GRB_CharAttr_VType, GRB_CONTINUOUS);
-
-        // calculating wall clock time to solve LP relaxation
-        struct timeval *clock_start = (struct timeval *) malloc(sizeof(struct timeval));
-        struct timeval *clock_stop  = (struct timeval *) malloc(sizeof(struct timeval));
-        gettimeofday(clock_start, 0);
-
-        // solve LP to optimality; then iterate reoptimizing and separating SECs
-        model->optimize();
-        bool model_updated = true;
-        this->lp_passes = 1;
-
-        while (model_updated && model->get(GRB_IntAttr_Status) == GRB_OPTIMAL)
-        {
-            model_updated = false;
-
-            #ifdef DEBUG_LPR
-            cout << "LP relaxation pass #" << lp_passes << " (bound = "
-                 << model->get(GRB_DoubleAttr_ObjVal) << ")" << endl;
-            #endif
-
-            // eventual cuts are stored here
-            vector<GRBLinExpr> cuts_lhs = vector<GRBLinExpr>();
-            vector<long> cuts_rhs = vector<long>();
-
-            if (USE_FAST_INTEGER_CUT_IN_LPR)
-            {
-                // check if solution is integral and attempt more efficient
-                // separation procedure in that case
-                model_updated = separate_SEC_integer(cuts_lhs,cuts_rhs);
-            }
-
-            if (!model_updated && USE_FAST_FOLKLORE_CUT_IN_LPR)
-            {
-                // if not using the integer separation or if solution is
-                // fractional, try standard separation procedure (capacities 
-                // in auxiliary network equal to current vars), which is
-                // faster than the classical algorithm but inexact
-                model_updated = separate_SEC_folklore(cuts_lhs,cuts_rhs);
-            }
-
-            if (!model_updated)
-            {
-                // original 1983 separation procedure (capacities in auxiliary
-                // network set so as to yield most violated inequality)
-                model_updated = separate_SEC_classical(cuts_lhs,cuts_rhs);
-            }
-            
-
-            if (model_updated)
-            {
-                //cout << cuts_lhs.size() << " cuts added" << endl;
-
-                // add cut(s)
-                for (unsigned long idx = 0; idx<cuts_lhs.size(); ++idx)
-                    model->addConstr(cuts_lhs[idx] <= cuts_rhs[idx]);
-
-                // reoptmize
-                model->update();
-                model->optimize();
-                this->lp_passes++;
-            }
-        }
-
-        // LP relaxation time
-        gettimeofday(clock_stop, 0);
-        unsigned long clock_time = 1.e6 * (clock_stop->tv_sec - clock_start->tv_sec) +
-                                          (clock_stop->tv_usec - clock_start->tv_usec);
-        this->lp_runtime = ((double)clock_time / (double)1.e6);
-        free(clock_start);
-        free(clock_stop);
-
-        // loop might have broken because no violated SEC exists or because the problem became infeasible
-        if (model->get(GRB_IntAttr_Status) == GRB_OPTIMAL)
-        {
-            this->lp_bound = model->get(GRB_DoubleAttr_ObjVal);
-            
-            // restore IP model
-            model->set(GRB_IntParam_Cuts, -1);
-            for (long i=0; i < instance->graph->num_edges; i++)
-                x[i].set(GRB_CharAttr_VType, GRB_BINARY);
-
-            return true;
-        }
-        else if (model->get(GRB_IntAttr_Status) == GRB_INFEASIBLE)
-        {
-            cout << "LP relaxation infeasible!" << endl;
-            cout << "Model runtime: " << lp_runtime << endl;
-            return false;
-        }
-        else
-        {
-            cout << "Unexpected error: solve_lp_relax() got neither optimal nor infeasible model" << endl;
-            cout << "Model runtime: " << lp_runtime << endl;
-            return false;
-        }
+        delete[] x_val;
     }
-    catch(GRBException e)
+    catch (GRBException e)
     {
-        cout << "Error code = " << e.getErrorCode() << endl;
+        cout << "Error " << e.getErrorCode() << " during separate_lpr: ";
         cout << e.getMessage() << endl;
-        return false;
+    }
+    catch (...)
+    {
+        cout << "Unexpected error during separate_lpr" << endl;
     }
 }
 
-void StableSpanningTreeModel::dfs_checking_acyclic( long u,
-                                                    long parent,
-                                                    vector<bool> &check,
-                                                    long &checked_count,
-                                                    stack<long> &cycle_edges,
-                                                    vector< list<long> > &adj_list,
-                                                    bool &acyclic)
+void CutGenerator::separate_sec(int kind_of_cuts)
+{
+    /// wrapper for the separation procedure to suit different kinds of cuts
+
+    bool model_updated = false;
+
+    // eventual cuts are stored here
+    vector<GRBLinExpr> cuts_lhs = vector<GRBLinExpr>();
+    vector<long> cuts_rhs = vector<long>();
+
+    if (USE_FAST_INTEGER_CUT_IN_IP)
+    {
+        // check if solution is integral and attempt more efficient
+        // separation procedure in that case
+        model_updated = separate_SEC_integer(cuts_lhs,cuts_rhs);
+    }
+
+    if (!model_updated && USE_FAST_FOLKLORE_CUT_IN_IP)
+    {
+        // if not using the integer separation or if solution is
+        // fractional, try standard separation procedure (capacities 
+        // in auxiliary network equal to current vars), which is
+        // faster than the classical algorithm but inexact
+        model_updated = separate_SEC_folklore(cuts_lhs,cuts_rhs);
+    }
+
+    if (!model_updated)
+    {
+        // original 1983 separation procedure (capacities in auxiliary
+        // network set so as to yield most violated inequality)
+        model_updated = separate_SEC_classical(cuts_lhs,cuts_rhs);
+    }
+
+    if (model_updated)
+    {
+        // add cuts
+        for (unsigned long idx = 0; idx<cuts_lhs.size(); ++idx)
+        {
+            if (kind_of_cuts == ADD_USER_CUTS)
+                addCut(cuts_lhs[idx] <= cuts_rhs[idx]);
+
+            else if (kind_of_cuts == ADD_LAZY_CNTRS)
+                addLazy(cuts_lhs[idx] <= cuts_rhs[idx]);
+
+            else // kind_of_cuts == ADD_STD_CNTRS
+                model->addConstr(cuts_lhs[idx] <= cuts_rhs[idx]);
+        }
+    }
+
+}
+
+void CutGenerator::dfs_checking_acyclic( long u,
+                                         long parent,
+                                         vector<bool> &check,
+                                         long &checked_count,
+                                         stack<long> &cycle_edges,
+                                         vector< list<long> > &adj_list,
+                                         bool &acyclic)
 {
     /// specialized depth-first search to check if a subgraph is acyclic
 
@@ -289,25 +201,24 @@ void StableSpanningTreeModel::dfs_checking_acyclic( long u,
     }
 }
 
-bool StableSpanningTreeModel::separate_SEC_integer( vector<GRBLinExpr> &cuts_lhs,
-                                                    vector<long> &cuts_rhs )
+bool CutGenerator::separate_SEC_integer( vector<GRBLinExpr> &cuts_lhs,
+                                         vector<long> &cuts_rhs )
 {
     /***
      * solve the separation problem for an integer solution (in this case, we 
-     * may check for violated secs in reduced complexity)
+     * may check for violated secs faster)
      */
 
     // store indices of variables which are set to 0 or 1
     vector<long> s_ = vector<long>();
-    for (long i=0; i < this->instance->graph->num_edges; ++i)
+    for (long i=0; i < num_vars; ++i)
     {
-        double x_val = this->x[i].get(GRB_DoubleAttr_X);
-        if (x_val <= EPSILON_TOL || x_val > 1 - EPSILON_TOL)
+        if (x_val[i] <= EPSILON_TOL || x_val[i] > 1 - EPSILON_TOL)
             s_.push_back(i);
     }
 
     // proceed only if the current solution is integer
-    if (s_.size() == (unsigned) instance->graph->num_edges)
+    if (s_.size() == (unsigned) this->num_vars)
     {
         /*
         #ifdef DEBUG_LPR
@@ -322,7 +233,7 @@ bool StableSpanningTreeModel::separate_SEC_integer( vector<GRBLinExpr> &cuts_lhs
         
         for (vector<long>::iterator it = s_.begin(); it != s_.end(); ++it)
         {
-            if (this->x[*it].get(GRB_DoubleAttr_X) > 1 - EPSILON_TOL)
+            if (x_val[*it] > 1 - EPSILON_TOL)
             {
                 long u = this->instance->graph->s[*it];
                 long v = this->instance->graph->t[*it];
@@ -364,7 +275,7 @@ bool StableSpanningTreeModel::separate_SEC_integer( vector<GRBLinExpr> &cuts_lhs
             // lhs
             while (!cycle_edges.empty())
             {
-                violated_constraint += x[cycle_edges.top()];
+                violated_constraint += x_vars[cycle_edges.top()];
 
                 /*
                 #ifdef DEBUG_LPR
@@ -398,8 +309,8 @@ bool StableSpanningTreeModel::separate_SEC_integer( vector<GRBLinExpr> &cuts_lhs
     return false;
 }
 
-bool StableSpanningTreeModel::separate_SEC_folklore( vector<GRBLinExpr> &cuts_lhs,
-                                                     vector<long> &cuts_rhs )
+bool CutGenerator::separate_SEC_folklore( vector<GRBLinExpr> &cuts_lhs,
+                                          vector<long> &cuts_rhs )
 {
     /***
      * try to solve the separation problem for subtour elimination constraints
@@ -409,16 +320,11 @@ bool StableSpanningTreeModel::separate_SEC_folklore( vector<GRBLinExpr> &cuts_lh
      */
 
     // prevent floating point errors by ignoring digits beyond set precision 
-    vector<double> x_val;
-    for (long i=0; i < instance->graph->num_edges; ++i)
+    for (long i=0; i < this->num_vars; ++i)
     {
-        double tmp1 = this->x[i].get(GRB_DoubleAttr_X);
-
-        double tmp2 = tmp1 * std::pow(10,SEC_SEPARATION_PRECISION_IN_LPR);
-        tmp2 = std::round(tmp2);
-        tmp2 = tmp2 * std::pow(10,-SEC_SEPARATION_PRECISION_IN_LPR);
-
-        x_val.push_back(tmp2);
+        double tmp = x_val[i] * std::pow(10,SEC_SEPARATION_PRECISION_IN_IP);
+        tmp = std::round(tmp);
+        x_val[i] = tmp * std::pow(10,-SEC_SEPARATION_PRECISION_IN_IP);
     }
 
     // LEMON digraph representing the current solution
@@ -435,7 +341,7 @@ bool StableSpanningTreeModel::separate_SEC_folklore( vector<GRBLinExpr> &cuts_lh
         lemon_arcs.push_back( vector<SmartDigraph::Arc>(instance->graph->num_vertices, lemon::Invalid()) );
     
     // for each edge in the original graph, create arcs on both directions
-    for (long i=0; i<instance->graph->num_edges; ++i)
+    for (long i=0; i<this->num_vars; ++i)
     {
         long v1 = instance->graph->s[i];
         long v2 = instance->graph->t[i];
@@ -502,12 +408,12 @@ bool StableSpanningTreeModel::separate_SEC_folklore( vector<GRBLinExpr> &cuts_lh
                 double cutset_var_sum = 0;
                 
                 // object storing new cut
-                violated_sec *sec = new violated_sec(instance->graph->num_edges);
+                violated_sec *sec = new violated_sec(this->num_vars);
                 bool delay_sec_destruction = false;
 
                 GRBLinExpr violated_constraint = 0;
 
-                // lhs: variables (x) corresponding to arcs within checked vertices
+                // lhs: variables corresponding to arcs within checked vertices
                 for (long i=0; i<instance->graph->num_vertices; ++i)
                 {
                     for (long j=i+1; j<instance->graph->num_vertices; ++j)
@@ -515,7 +421,7 @@ bool StableSpanningTreeModel::separate_SEC_folklore( vector<GRBLinExpr> &cuts_lh
                         long edge_idx = this->instance->graph->index_matrix[i][j];
                         if(edge_idx >= 0 && cutset_chk_v[i] && cutset_chk_v[j])
                         {
-                            violated_constraint += x[edge_idx];
+                            violated_constraint += x_vars[edge_idx];
 
                             sec->S.push_back(edge_idx);
                             sec->coefficients[edge_idx] = true;
@@ -549,7 +455,7 @@ bool StableSpanningTreeModel::separate_SEC_folklore( vector<GRBLinExpr> &cuts_lh
                             counting_cuts[sec_id] = 1;
 
 
-                            if (SEC_STRATEGY_IN_LPR == ALL_CUTS)
+                            if (SEC_STRATEGY == ALL_CUTS)
                             {
                                 /*
                                 #ifdef DEBUG_LPR
@@ -564,7 +470,7 @@ bool StableSpanningTreeModel::separate_SEC_folklore( vector<GRBLinExpr> &cuts_lh
                                 cuts_lhs.push_back(violated_constraint);
                                 cuts_rhs.push_back(cutset_size - 1);
 
-                                if (STORE_CUT_POOL_IN_LPR)
+                                if (STORE_CUT_POOL_IN_IP)
                                     stats->pool[sec_id] = 1;
                             }
                             else   // will inspect/add secs selectively
@@ -597,7 +503,7 @@ bool StableSpanningTreeModel::separate_SEC_folklore( vector<GRBLinExpr> &cuts_lh
                         GRBLinExpr alt_violated_constraint = 0;
                         cutset_var_sum = 0;
                         
-                        // lhs: vars (x) corresponding to arcs within unchecked vertices
+                        // lhs: vars corresponding to arcs within unchecked vertices
                         for (long i=0; i<instance->graph->num_vertices; ++i)
                         {
                             for (long j=i+1; j<instance->graph->num_vertices; ++j)
@@ -605,7 +511,7 @@ bool StableSpanningTreeModel::separate_SEC_folklore( vector<GRBLinExpr> &cuts_lh
                                 long edge_idx = instance->graph->index_matrix[i][j];
                                 if(edge_idx >= 0 && !cutset_chk_v[i] && !cutset_chk_v[j])
                                 {
-                                    alt_violated_constraint += x[edge_idx];
+                                    alt_violated_constraint += x_vars[edge_idx];
 
                                     sec->S.push_back(edge_idx);
                                     sec->coefficients[edge_idx] = true;
@@ -633,7 +539,7 @@ bool StableSpanningTreeModel::separate_SEC_folklore( vector<GRBLinExpr> &cuts_lh
                                 // first time seeing this inequality
                                 counting_cuts[sec_id] = 1;
 
-                                if (SEC_STRATEGY_IN_LPR == ALL_CUTS)
+                                if (SEC_STRATEGY == ALL_CUTS)
                                 {
                                     /*
                                     #ifdef DEBUG_LPR
@@ -648,7 +554,7 @@ bool StableSpanningTreeModel::separate_SEC_folklore( vector<GRBLinExpr> &cuts_lh
                                     cuts_lhs.push_back(alt_violated_constraint);
                                     cuts_rhs.push_back(cutset_size - 1);
 
-                                    if (STORE_CUT_POOL_IN_LPR)
+                                    if (STORE_CUT_POOL_IN_IP)
                                         stats->pool[sec_id] = 1;
                                 }
                                 else   // will inspect/add secs selectively
@@ -682,7 +588,7 @@ bool StableSpanningTreeModel::separate_SEC_folklore( vector<GRBLinExpr> &cuts_lh
     
     // 6. ENHANCED CUT ADDITION STRATEGIES
     
-    if (separated > 0 && SEC_STRATEGY_IN_LPR != ALL_CUTS)
+    if (separated > 0 && SEC_STRATEGY != ALL_CUTS)
     {
         /*
         #ifdef DEBUG_LPR
@@ -696,12 +602,12 @@ bool StableSpanningTreeModel::separate_SEC_folklore( vector<GRBLinExpr> &cuts_lh
         // 6.1 ADD MOST VIOLATED CUT, INCLUDED IN BOTH ENHANCED STRATEGIES
         GRBLinExpr violated_constraint = 0;
         
-        // lhs: variables (x) corresponding to arcs within this set S
+        // lhs: variables corresponding to arcs within this set S
         long edge_count = cuts[most_violated_idx]->S.size();
         for (long e=0; e<edge_count; ++e)
         {
             long idx = cuts[most_violated_idx]->S.at(e);
-            violated_constraint += x[idx];
+            violated_constraint += x_vars[idx];
 
             /*
             #ifdef DEBUG_LPR
@@ -714,7 +620,7 @@ bool StableSpanningTreeModel::separate_SEC_folklore( vector<GRBLinExpr> &cuts_lh
         cuts_lhs.push_back(violated_constraint);
         cuts_rhs.push_back(cuts[most_violated_idx]->vertex_count - 1);
 
-        if (STORE_CUT_POOL_IN_LPR)
+        if (STORE_CUT_POOL_IN_IP)
             stats->pool[cuts[most_violated_idx]->toString()] = 1;
         
         /*
@@ -725,14 +631,14 @@ bool StableSpanningTreeModel::separate_SEC_folklore( vector<GRBLinExpr> &cuts_lh
 
         // we are done if the strategy is to add just the most violated cut
         
-        if (SEC_STRATEGY_IN_LPR == ORTHOGONAL_CUTS)
+        if (SEC_STRATEGY == ORTHOGONAL_CUTS)
         {
             // 6.2 ADD ANY OTHER CUT WHOSE HYPERPLANE HAS INNER PRODUCT WITH THAT
             // OF THE MOST VIOLATED CUT CLOSE TO ZERO
             
             // 2-norm of the vector corresponding to most violated inequality
             double norm_v1 = 0.;
-            for(long i=0; i<instance->graph->num_edges; ++i)
+            for(long i=0; i < this->num_vars; ++i)
             {
                 double base = (double) cuts[most_violated_idx]->coefficients[i];
                 double sq = pow(base, 2.);
@@ -748,7 +654,7 @@ bool StableSpanningTreeModel::separate_SEC_folklore( vector<GRBLinExpr> &cuts_lh
                 {
                     // 2-norm of candidate cut vector
                     double norm_v2 = 0.;
-                    for(long i=0; i<instance->graph->num_edges; ++i)
+                    for(long i=0; i < this->num_vars; ++i)
                     {
                         double base = (double) cuts[cut_idx]->coefficients[i];
                         double sq = pow(base, 2.);
@@ -760,7 +666,7 @@ bool StableSpanningTreeModel::separate_SEC_folklore( vector<GRBLinExpr> &cuts_lh
                 
                     // inner product
                     double dot = 0.;
-                    for(long i=0; i<instance->graph->num_edges; ++i)
+                    for(long i=0; i < this->num_vars; ++i)
                     {
                         double v1_i = (double) cuts[most_violated_idx]->coefficients[i];
                         double v2_i = (double) cuts[cut_idx]->coefficients[i];
@@ -773,23 +679,23 @@ bool StableSpanningTreeModel::separate_SEC_folklore( vector<GRBLinExpr> &cuts_lh
                     double inner_prod = (double) dot / norm;
                     
                     // add sec if sufficiently close to being orthogonal to the most violated one
-                    if (inner_prod <= ORTHOGONALITY_TOL_IN_LPR)
+                    if (inner_prod <= ORTHOGONALITY_TOL_IN_IP)
                     {
                         GRBLinExpr constr = 0;
                         
-                        // lhs: variables (x) corresponding to this cut
+                        // lhs: variables corresponding to this cut
                         long e_count = cuts[cut_idx]->S.size();
                         for (long e=0; e<e_count; ++e)
                         {
                             long edge_idx = cuts[cut_idx]->S.at(e);
-                            constr += x[edge_idx];
+                            constr += x_vars[edge_idx];
                         }
 
                         // store sec (caller method adds it to the model)
                         cuts_lhs.push_back(constr);
                         cuts_rhs.push_back(cuts[cut_idx]->vertex_count - 1);
 
-                        if (STORE_CUT_POOL_IN_LPR)
+                        if (STORE_CUT_POOL_IN_IP)
                             stats->pool[cuts[cut_idx]->toString()] = 1;
 
                         /*
@@ -814,8 +720,8 @@ bool StableSpanningTreeModel::separate_SEC_folklore( vector<GRBLinExpr> &cuts_lh
     return (separated > 0);
 }
 
-bool StableSpanningTreeModel::separate_SEC_classical( vector<GRBLinExpr> &cuts_lhs,
-                                                      vector<long> &cuts_rhs )
+bool CutGenerator::separate_SEC_classical( vector<GRBLinExpr> &cuts_lhs,
+                                           vector<long> &cuts_rhs )
 {
     /***
      * Solve the separation problem for subtour elimination constraints.
@@ -823,23 +729,18 @@ bool StableSpanningTreeModel::separate_SEC_classical( vector<GRBLinExpr> &cuts_l
      */
 
     // prevent floating point errors by ignoring digits beyond set precision 
-    vector<double> x_val;
     vector<double> x_singleton_cap(instance->graph->num_vertices, 0.);
-    for (long i=0; i < instance->graph->num_edges; ++i)
+    for (long i=0; i < this->num_vars; ++i)
     {
-        double tmp1 = this->x[i].get(GRB_DoubleAttr_X);
-
-        double tmp2 = tmp1 * std::pow(10,SEC_SEPARATION_PRECISION_IN_LPR);
-        tmp2 = std::round(tmp2);
-        tmp2 = tmp2 * std::pow(10,-SEC_SEPARATION_PRECISION_IN_LPR);
-
-        x_val.push_back(tmp2);
+        double tmp = x_val[i] * std::pow(10,SEC_SEPARATION_PRECISION_IN_IP);
+        tmp = std::round(tmp);
+        x_val[i] = tmp * std::pow(10,-SEC_SEPARATION_PRECISION_IN_IP);
 
         // capacities of singleton cutsets
         long v1 = instance->graph->s[i];
         long v2 = instance->graph->t[i];
-        x_singleton_cap[v1] = x_singleton_cap[v1] + tmp2;
-        x_singleton_cap[v2] = x_singleton_cap[v2] + tmp2;
+        x_singleton_cap[v1] = x_singleton_cap[v1] + x_val[i];
+        x_singleton_cap[v2] = x_singleton_cap[v2] + x_val[i];
     }
 
     // LEMON digraph representing the current solution
@@ -856,7 +757,7 @@ bool StableSpanningTreeModel::separate_SEC_classical( vector<GRBLinExpr> &cuts_l
         lemon_arcs.push_back( vector<SmartDigraph::Arc>(instance->graph->num_vertices, lemon::Invalid()) );
 
     // for each edge in the original graph, create arcs on both directions
-    for (long i=0; i<instance->graph->num_edges; ++i)
+    for (long i=0; i < this->num_vars; ++i)
     {
         long v1 = instance->graph->s[i];
         long v2 = instance->graph->t[i];
@@ -969,12 +870,12 @@ bool StableSpanningTreeModel::separate_SEC_classical( vector<GRBLinExpr> &cuts_l
         double cutset_var_sum = 0;
         
         // object storing new cut
-        violated_sec *sec = new violated_sec(instance->graph->num_edges);
+        violated_sec *sec = new violated_sec(this->num_vars);
         bool delay_sec_destruction = false;
 
         GRBLinExpr violated_constraint = 0;
 
-        // lhs: variables (x) corresponding to edges within checked vertices
+        // lhs: variables corresponding to edges within checked vertices
         for (long i=0; i<instance->graph->num_vertices; ++i)
         {
             for (long j=i+1; j<instance->graph->num_vertices; ++j)
@@ -982,7 +883,7 @@ bool StableSpanningTreeModel::separate_SEC_classical( vector<GRBLinExpr> &cuts_l
                 long edge_idx = this->instance->graph->index_matrix[i][j];
                 if(edge_idx >= 0 && chk_v[i] && chk_v[j])
                 {
-                    violated_constraint += x[edge_idx];
+                    violated_constraint += x_vars[edge_idx];
 
                     sec->S.push_back(edge_idx);
                     sec->coefficients[edge_idx] = true;
@@ -994,7 +895,7 @@ bool StableSpanningTreeModel::separate_SEC_classical( vector<GRBLinExpr> &cuts_l
         }
         
         // 5. VERTICES IN THE CUTSET YIELD VIOLATED SEC
-        // TODO: NO NEED FOR A TOLERANCE HERE? if ( cutset_var_sum > ((double) cutset_size - 1.0 + SEC_VIOLATION_TOL_IN_LPR) )
+        // TODO: NO NEED FOR A TOLERANCE HERE? if ( cutset_var_sum > ((double) cutset_size - 1.0 + SEC_VIOLATION_TOL_IN_IP) )
         if ( cutset_var_sum > ((double) cutset_size - 1.0) )
         {
             ++separated;  // flag a cut was found
@@ -1010,7 +911,7 @@ bool StableSpanningTreeModel::separate_SEC_classical( vector<GRBLinExpr> &cuts_l
                 // first time seeing this inequality
                 counting_cuts[sec_id] = 1;
 
-                if (SEC_STRATEGY_IN_LPR == ALL_CUTS)
+                if (SEC_STRATEGY == ALL_CUTS)
                 {
                     /*
                     #ifdef DEBUG_LPR
@@ -1025,7 +926,7 @@ bool StableSpanningTreeModel::separate_SEC_classical( vector<GRBLinExpr> &cuts_l
                     cuts_lhs.push_back(violated_constraint);
                     cuts_rhs.push_back(cutset_size - 1);
 
-                    if (STORE_CUT_POOL_IN_LPR)
+                    if (STORE_CUT_POOL_IN_IP)
                         stats->pool[sec_id] = 1;
                 }
                 else   // will inspect and add SECs selectively 
@@ -1056,7 +957,7 @@ bool StableSpanningTreeModel::separate_SEC_classical( vector<GRBLinExpr> &cuts_l
      * is "sufficiently close" to being orthogonal with the most violated one
      */
 
-    if (separated > 0 && SEC_STRATEGY_IN_LPR != ALL_CUTS)
+    if (separated > 0 && SEC_STRATEGY != ALL_CUTS)
     {
         // the most violated inequality is given by the first cut above
         long most_violated_idx = 0;
@@ -1067,31 +968,31 @@ bool StableSpanningTreeModel::separate_SEC_classical( vector<GRBLinExpr> &cuts_l
         // 6.1 ADD MOST VIOLATED CUT, INCLUDED IN BOTH ENHANCED STRATEGIES
         GRBLinExpr violated_constraint = 0;
         
-        // lhs: variables (x) corresponding to edges within this set S
+        // lhs: variables corresponding to edges within this set S
         long edge_count = cuts[most_violated_idx]->S.size();
         for (long e=0; e<edge_count; ++e)
         {
             long idx = cuts[most_violated_idx]->S.at(e);
-            violated_constraint += x[idx];
+            violated_constraint += x_vars[idx];
         }
         
         // store sec (caller method adds it to the model)
         cuts_lhs.push_back(violated_constraint);
         cuts_rhs.push_back(cuts[most_violated_idx]->vertex_count - 1);
         
-        if (STORE_CUT_POOL_IN_LPR)
+        if (STORE_CUT_POOL_IN_IP)
             stats->pool[cuts[most_violated_idx]->toString()] = 1;
 
         // 6.2 WE ARE DONE IF THE STRATEGY IS TO ADD JUST THE MOST VIOLATED CUT
 
-        if (SEC_STRATEGY_IN_LPR == ORTHOGONAL_CUTS)
+        if (SEC_STRATEGY == ORTHOGONAL_CUTS)
         {
             // 6.3 ADD ANY OTHER CUT WHOSE HYPERPLANE HAS INNER PRODUCT WITH THAT
             // OF THE MOST VIOLATED CUT CLOSE TO ZERO
 
             // 2-norm of the vector corresponding to most violated inequality
             double norm_v1 = 0.;
-            for(long i=0; i<instance->graph->num_edges; ++i)
+            for(long i=0; i < this->num_vars; ++i)
             {
                 double base = (double) cuts[most_violated_idx]->coefficients[i];
                 double sq = pow(base, 2.);
@@ -1107,7 +1008,7 @@ bool StableSpanningTreeModel::separate_SEC_classical( vector<GRBLinExpr> &cuts_l
                 {
                     // 2-norm of candidate cut vector
                     double norm_v2 = 0.;
-                    for(long i=0; i<instance->graph->num_edges; ++i)
+                    for(long i=0; i < this->num_vars; ++i)
                     {
                         double base = (double) cuts[cut_idx]->coefficients[i];
                         double sq = pow(base, 2.);
@@ -1119,7 +1020,7 @@ bool StableSpanningTreeModel::separate_SEC_classical( vector<GRBLinExpr> &cuts_l
                 
                     // inner product
                     double dot = 0.;
-                    for(long i=0; i<instance->graph->num_edges; ++i)
+                    for(long i=0; i < this->num_vars; ++i)
                     {
                         double v1_i = (double) cuts[most_violated_idx]->coefficients[i];
                         double v2_i = (double) cuts[cut_idx]->coefficients[i];
@@ -1132,23 +1033,23 @@ bool StableSpanningTreeModel::separate_SEC_classical( vector<GRBLinExpr> &cuts_l
                     double inner_prod = (double) dot / norm;
                     
                     // add sec if sufficiently close to being orthogonal to the most violated one
-                    if (inner_prod <= ORTHOGONALITY_TOL_IN_LPR)
+                    if (inner_prod <= ORTHOGONALITY_TOL_IN_IP)
                     {
                         GRBLinExpr constr = 0;
                         
-                        // lhs: variables (x) corresponding to this cut
+                        // lhs: variables corresponding to this cut
                         long e_count = cuts[cut_idx]->S.size();
                         for (long e=0; e<e_count; ++e)
                         {
                             long edge_idx = cuts[cut_idx]->S.at(e);
-                            constr += x[edge_idx];
+                            constr += x_vars[edge_idx];
                         }
 
                         // store sec (caller method adds it to the model)
                         cuts_lhs.push_back(constr);
                         cuts_rhs.push_back(cuts[cut_idx]->vertex_count - 1);
                         
-                        if (STORE_CUT_POOL_IN_LPR)
+                        if (STORE_CUT_POOL_IN_IP)
                             stats->pool[cuts[cut_idx]->toString()] = 1;
                     }
                 }

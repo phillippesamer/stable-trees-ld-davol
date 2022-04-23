@@ -103,98 +103,107 @@ int KStabModel::solve(bool logging)
         //model->set(GRB_IntParam_PrePasses, 0);
         //model->set(GRB_DoubleParam_Heuristics, 0);
 
-        // need to disable presolve reductions that affect user cuts
-        //model->set(GRB_IntParam_PreCrush, 1);
-
         if (logging == true)
             model->set(GRB_IntParam_OutputFlag, 1);
         else
             model->set(GRB_IntParam_OutputFlag, 0);
 
         model->optimize();
-        this->solution_runtime = model->get(GRB_DoubleAttr_Runtime);
 
-        // store results in this object
-        if (model->get(GRB_IntAttr_Status) == GRB_OPTIMAL)
-        {
-            this->solution_status = AT_OPTIMUM;
-            this->solution_vector.clear();
-
-            this->solution_weight = this->solution_dualbound 
-                                  = model->get(GRB_DoubleAttr_ObjVal);
-
-            // save bool vector of this solution
-
-            /*
-            #ifdef DEBUG
-                cout << "Model optimal vector: " << endl;
-            #endif
-            */
-
-            for (long i=0; i < instance->graph->num_edges; ++i)
-            {
-                // NB: gurobi vars are floating point numbers, allowing +0 and -0!
-                // The vector<bool> below is safer and easier to use
-
-                if (this->x[i].get(GRB_DoubleAttr_X) > ZERO_TOL)
-                    this->solution_vector.push_back(true);
-                else
-                    this->solution_vector.push_back(false);
-
-                /*
-                #ifdef DEBUG
-                    cout << this->solution_vector.back();
-                #endif
-                */
-            }
-
-            // returning number of solutions (likely sub-optimal), in case it's useful later
-            return model->get(GRB_IntAttr_SolCount);
-        }
-        else if (model->get(GRB_IntAttr_Status) == GRB_INFEASIBLE)
-        {
-            this->solution_status = IS_INFEASIBLE;
-
-            this->solution_weight = numeric_limits<double>::max();
-            this->solution_dualbound = numeric_limits<double>::max();
-            this->solution_vector.clear();
-
-            cout << "Model infeasible! (runtime "
-                 << solution_runtime << ")" << endl;
-
-            return 0;
-        }
-        else if (model->get(GRB_IntAttr_Status) == GRB_TIME_LIMIT)
-        {
-            this->solution_status = STATUS_UNKNOWN;
-
-            this->solution_weight = (model->get(GRB_IntAttr_SolCount) > 0) ?
-                                    model->get(GRB_DoubleAttr_ObjVal) :
-                                    numeric_limits<double>::max();
-            this->solution_dualbound = model->get(GRB_DoubleAttr_ObjBound);
-
-            cout << "Time limit exceeded (" << solution_runtime << ")" << endl;
-            cout << "Dual bound " << this->solution_dualbound 
-                 << ", primal bound " << this->solution_weight 
-                 << " (MIP gap " << model->get(GRB_DoubleAttr_MIPGap) << "%)" 
-                 << endl;
-
-            return 0;
-        }
-        else
-        {
-            this->solution_status = STATUS_UNKNOWN;
-            this->solution_vector.clear();
-
-            cout << "Unexpected error: solve() got neither optimal nor infeasible model" << endl;
-
-            return 0;
-        }
+        return this->save_optimization_status();
     }
     catch(GRBException e)
     {
         cout << "Error code = " << e.getErrorCode() << endl;
         cout << e.getMessage() << endl;
+        return 0;
+    }
+    catch(...)
+    {
+        cout << "Unexpected error during optimization inside KStabModel::solve()" << endl;
+        return 0;
+    }
+}
+
+int KStabModel::save_optimization_status()
+{
+    /// Set class fields accordingly after call to optmize()
+
+    this->solution_runtime = model->get(GRB_DoubleAttr_Runtime);
+
+    // store results in this object
+    if (model->get(GRB_IntAttr_Status) == GRB_OPTIMAL)
+    {
+        this->solution_status = AT_OPTIMUM;
+        this->solution_vector.clear();
+
+        this->solution_weight = this->solution_dualbound 
+                              = model->get(GRB_DoubleAttr_ObjVal);
+
+        /*
+        #ifdef DEBUG
+            cout << "Model optimal vector: " << endl;
+        #endif
+        */
+
+        // save bool vector of this solution
+        for (long i=0; i < instance->graph->num_edges; ++i)
+        {
+            // NB: gurobi vars are floating point numbers, allowing +0 and -0!
+            // The vector<bool> below is safer and easier to use
+
+            if (this->x[i].get(GRB_DoubleAttr_X) > ZERO_TOL)
+                this->solution_vector.push_back(true);
+            else
+                this->solution_vector.push_back(false);
+
+            /*
+            #ifdef DEBUG
+                cout << this->solution_vector.back();
+            #endif
+            */
+        }
+
+        // returning number of solutions (likely sub-optimal), in case it's useful later
+        return model->get(GRB_IntAttr_SolCount);
+    }
+    else if (model->get(GRB_IntAttr_Status) == GRB_INFEASIBLE)
+    {
+        this->solution_status = IS_INFEASIBLE;
+
+        this->solution_weight = numeric_limits<double>::max();
+        this->solution_dualbound = numeric_limits<double>::max();
+        this->solution_vector.clear();
+
+        cout << "Model infeasible! (runtime "
+             << solution_runtime << ")" << endl;
+
+        return 0;
+    }
+    else if (model->get(GRB_IntAttr_Status) == GRB_TIME_LIMIT)
+    {
+        this->solution_status = STATUS_UNKNOWN;
+
+        this->solution_weight = (model->get(GRB_IntAttr_SolCount) > 0) ?
+                                model->get(GRB_DoubleAttr_ObjVal) :
+                                numeric_limits<double>::max();
+        this->solution_dualbound = model->get(GRB_DoubleAttr_ObjBound);
+
+        cout << "Time limit exceeded (" << solution_runtime << ")" << endl;
+        cout << "Dual bound " << this->solution_dualbound 
+             << ", primal bound " << this->solution_weight 
+             << " (MIP gap " << model->get(GRB_DoubleAttr_MIPGap) << "%)" 
+             << endl;
+
+        return 0;
+    }
+    else
+    {
+        this->solution_status = STATUS_UNKNOWN;
+        this->solution_vector.clear();
+
+        cout << "Unexpected error: solve() got neither optimal nor infeasible model" << endl;
+
         return 0;
     }
 }
@@ -203,7 +212,6 @@ double KStabModel::runtime()
 {
     return model->get(GRB_DoubleAttr_Runtime);
 }
-
 
 void KStabModel::set_time_limit(double tl)
 {

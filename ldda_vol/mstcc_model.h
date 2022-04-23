@@ -22,8 +22,10 @@ using namespace lemon::concepts;
 #include "io.h"
 #include "kstab_model.h"
 
-#define SEC_VIOLATION_TOL 0.0001
-#define SEC_SEPARATION_PRECISION 14   // <= 14 without changing everything to long double
+// cut selection strategies
+#define MOST_VIOLATED_CUT 1
+#define ORTHOGONAL_CUTS 2
+#define ALL_CUTS 3
 
 /***
  * \file mstcc_model.h
@@ -38,13 +40,57 @@ using namespace lemon::concepts;
  * \date 04.12.2021
  */
 
-typedef struct
+bool inline sort_pairs_by_snd_val(pair<long,double> a, pair<long,double> b)
 {
+    return ( a.second < b.second ); 
+}
+
+
+class cut_statistics
+{
+public:
     map<string,int> pool;               // stores cuts not to add repeated ones
 
     vector<int> sec_diff_cuts;          // # of different cuts in each separation
     vector<double> sec_infeas_std_dev;  // std.dev. of the amount violated    
-} statistics;
+};
+
+
+/// information of a violated subtour elimination constraint
+class violated_sec
+{
+public:
+    violated_sec(long edge_count)
+    {
+        this->edge_count = edge_count;
+        coefficients = vector<bool>(edge_count, false);
+    }
+
+    virtual ~violated_sec() { }
+    
+    string toString()
+    {
+        ostringstream sec_lhs;
+        sec_lhs.str("");
+        for (vector<bool>::iterator it = coefficients.begin(); it != coefficients.end(); ++it)
+            sec_lhs << *it;
+        return sec_lhs.str();
+    }
+
+     void reset()
+     {
+        S.clear();
+        vertex_count = 0;
+        infeasibility = 0.;
+        coefficients = vector<bool>(edge_count, false);
+     }
+
+    long edge_count;            // instance parameter
+    vector<long> S;             // index of edge vars in cut
+    long vertex_count;          // number of vertices spanned by S
+    double infeasibility;       // amount by which the sec is violated
+    vector<bool> coefficients;  // hyperplane coefficients
+};
 
 
 class StableSpanningTreeModel: public KStabModel
@@ -52,8 +98,9 @@ class StableSpanningTreeModel: public KStabModel
 public:
     StableSpanningTreeModel(IO*);
     virtual ~StableSpanningTreeModel();
-    
-    bool solve_lp_relax(bool); // full model (with SEC in the ORIGINAL GRAPH)
+
+    int solve(bool);             // full IP (with SEC in the ORIGINAL GRAPH)
+    bool solve_lp_relax(bool);   // corresponding LP relaxation
     double lp_bound;
     double lp_runtime;
     long lp_passes;
@@ -61,7 +108,7 @@ public:
 private:
     friend class violated_sec;   // encapsulates a class of violated cuts
 
-    statistics *stats;
+    cut_statistics *stats;
 
     bool separate_SEC_integer(vector<GRBLinExpr> &, vector<long> &);
     bool separate_SEC_folklore(vector<GRBLinExpr> &, vector<long> &);

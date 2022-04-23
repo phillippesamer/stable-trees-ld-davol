@@ -21,7 +21,7 @@ EXE = $(DRIVER)
 
 # CHANGEME: Here is the name of all object files corresponding to the source
 #           code that you wrote in order to define the problem statement
-OBJS =  graph.o io.o kstab_model.o mstcc_model.o ldda.o ldda_vol.o $(DRIVER).o
+OBJS =  graph.o io.o kstab_model.o mstcc_model.o cut_generator.o ldda.o ldda_vol.o $(DRIVER).o
 
 # CHANGEME: Additional libraries
 ADDLIBS = $(GRB_LINK)
@@ -37,7 +37,7 @@ SRCDIR = .
 ##########################################################################
 #  Usually, you don't have to change anything below.  Note that if you   #
 #  change certain compiler options, you might have to recompile the      #
-#  package.                                                              #
+#  COIN-OR Vol package.                                                  #
 ##########################################################################
 
 COIN_HAS_PKGCONFIG = TRUE

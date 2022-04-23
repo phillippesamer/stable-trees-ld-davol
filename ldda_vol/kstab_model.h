@@ -67,6 +67,8 @@ protected:
     void create_objective();
     void create_variables();
     void create_constraints();
+
+    int save_optimization_status();
 };
 
 #endif

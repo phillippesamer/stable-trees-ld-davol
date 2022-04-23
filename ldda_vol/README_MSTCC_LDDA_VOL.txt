@@ -1,5 +1,5 @@
 -------------------------------------------------------------------------------
--- To get COIN-OR::Vol
+-- To get COIN-OR::Vol:
 
 git clone https://github.com/coin-or/Vol 
 
@@ -23,16 +23,16 @@ make
 
 
 -------------------------------------------------------------------------------
--- To compile and run MSTCC LDDA_Vol
+-- To compile and run MSTCC LDDA_Vol:
 
-git clone https://github.com/phillippesamer/mstcc-ldda.git
+git clone https://github.com/phillippesamer/mstcc-ldda
 
 cd mstcc-ldda/ldda_vol/
 
 edit the Makefile initial definitions of variables VOL_PATH and GRB_PATH to 
 reflect the root folder where COIN-OR::Vol and Gurobi are installed,
-respectivelly
+respectively
 
 make
 
-./main [input file]
+./main [input file path] [optimum (optional)]
