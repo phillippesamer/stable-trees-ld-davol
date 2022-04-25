@@ -26,12 +26,12 @@
 class CutGenerator: public GRBCallback
 {
 public:
-    CutGenerator(GRBVar*, IO*, cut_statistics*);
+    CutGenerator(GRBModel *, GRBVar*, IO*, cut_statistics*);
     virtual ~CutGenerator();
 
 protected:
     void callback();
-    void separate_lpr();
+    bool separate_lpr();
 
 private:
     friend class KStabModel;
@@ -47,7 +47,7 @@ private:
     long num_vars;
 
     long sec_counter;
-    void separate_sec(int);
+    bool separate_sec(int);
 
     bool separate_SEC_integer(vector<GRBLinExpr> &, vector<long> &);
     bool separate_SEC_folklore(vector<GRBLinExpr> &, vector<long> &);

@@ -45,7 +45,6 @@ bool inline sort_pairs_by_snd_val(pair<long,double> a, pair<long,double> b)
     return ( a.second < b.second ); 
 }
 
-
 class cut_statistics
 {
 public:
@@ -54,7 +53,6 @@ public:
     vector<int> sec_diff_cuts;          // # of different cuts in each separation
     vector<double> sec_infeas_std_dev;  // std.dev. of the amount violated    
 };
-
 
 /// information of a violated subtour elimination constraint
 class violated_sec
@@ -92,7 +90,6 @@ public:
     vector<bool> coefficients;  // hyperplane coefficients
 };
 
-
 class StableSpanningTreeModel: public KStabModel
 {
 public:
@@ -100,6 +97,7 @@ public:
     virtual ~StableSpanningTreeModel();
 
     int solve(bool);             // full IP (with SEC in the ORIGINAL GRAPH)
+
     bool solve_lp_relax(bool);   // corresponding LP relaxation
     double lp_bound;
     double lp_runtime;
@@ -109,11 +107,6 @@ private:
     friend class violated_sec;   // encapsulates a class of violated cuts
 
     cut_statistics *stats;
-
-    bool separate_SEC_integer(vector<GRBLinExpr> &, vector<long> &);
-    bool separate_SEC_folklore(vector<GRBLinExpr> &, vector<long> &);
-    bool separate_SEC_classical(vector<GRBLinExpr> &, vector<long> &);
-    void dfs_checking_acyclic(long, long, vector<bool> &, long &, stack<long> &, vector< list<long> > &, bool &);
 };
 
 #endif

@@ -13,15 +13,15 @@
 
 bool CUTS_AT_ROOT_ONLY = false;
 
-bool USE_FAST_FOLKLORE_CUT_IN_IP = true;
+bool USE_FAST_FOLKLORE_CUT_IN_IP = false;
 bool USE_FAST_INTEGER_CUT_IN_IP = true;
 
 int  SEC_STRATEGY = ALL_CUTS;
 bool STORE_CUT_POOL_IN_IP = false;
 
-
-CutGenerator::CutGenerator(GRBVar *x_vars, IO *instance, cut_statistics *stats)
+CutGenerator::CutGenerator(GRBModel *model, GRBVar *x_vars, IO *instance, cut_statistics *stats)
 {
+    this->model = model;
     this->x_vars = x_vars;
     this->instance = instance;
     this->stats = stats;
@@ -86,7 +86,7 @@ void CutGenerator::callback()
 }
 
 
-void CutGenerator::separate_lpr()
+bool CutGenerator::separate_lpr()
 {
     /// Interface to be used when solving the LP relaxation only.
 
@@ -97,22 +97,25 @@ void CutGenerator::separate_lpr()
             x_val[i] = x_vars[i].get(GRB_DoubleAttr_X);
 
         // find violated subtour eliminaton constraints (if any) and add cuts to the model
-        separate_sec(ADD_STD_CNTRS);
+        bool model_updated = separate_sec(ADD_STD_CNTRS);
 
         delete[] x_val;
+        return model_updated;
     }
     catch (GRBException e)
     {
         cout << "Error " << e.getErrorCode() << " during separate_lpr: ";
         cout << e.getMessage() << endl;
+        return false;
     }
     catch (...)
     {
         cout << "Unexpected error during separate_lpr" << endl;
+        return false;
     }
 }
 
-void CutGenerator::separate_sec(int kind_of_cuts)
+bool CutGenerator::separate_sec(int kind_of_cuts)
 {
     /// wrapper for the separation procedure to suit different kinds of cuts
 
@@ -161,6 +164,7 @@ void CutGenerator::separate_sec(int kind_of_cuts)
         }
     }
 
+    return model_updated;
 }
 
 void CutGenerator::dfs_checking_acyclic( long u,
