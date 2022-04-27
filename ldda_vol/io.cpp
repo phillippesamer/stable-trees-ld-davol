@@ -104,6 +104,16 @@ bool IO::parse_input_file(string filename)
             (*graph->lemon_edges_inverted_index)[e] = line_idx;
         }
 
+cout << "ADJ LIST OF 6: ";
+long u = 6;
+list<long>::iterator it = graph->adj_list[u].begin();
+while (it != graph->adj_list[u].end())
+{
+cout << (*it) << " \t"; 
+++it;
+}
+cout << endl << endl;
+
         /* original instances (gcc format) include a single line per conflict,
          * but carrabs instances (cms format) include two lines for each (both
          * e1 e2 and e2 e1)
@@ -299,6 +309,7 @@ void IO::dfs_checking_acyclic(long u,
         
         // considering only active edges
         long idx = graph->index_matrix[u][v];
+//cout << "idx = " << idx << " (u=" << u << ", v=" << v << ")" << endl << endl;
         if (active_edges[idx])
         {
             if (!check[v])

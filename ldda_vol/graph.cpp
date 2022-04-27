@@ -185,6 +185,25 @@ vector<long> Graph::lemon_contract_edge(long contract_index)
     cout << endl;
     */
 
+    // TO DO: REDESIGN THESE OPERATIONS, AS THIS IS ERROR-PRONE, IN NEW APPLICATIONS! ONLY THE LEMON DATA-STRUCTURE IS CORRECT AFTERWARDS
+    // vertex y is deleted next, so we fix the edge list so that edges previously incident to y now incide on x
+    //cout << "contracting edge {" << vertex_1 << "," << vertex_2 << "}" << endl;
+    for (ListGraph::IncEdgeIt edge_from_y(g,y); edge_from_y != INVALID; ++edge_from_y)
+    {
+        long edge_idx = (*lemon_edges_inverted_index)[edge_from_y];
+        if (s[edge_idx] == vertex_2)
+            s[edge_idx] = vertex_1;
+        else
+            t[edge_idx] = vertex_1;
+        
+        /*
+        cout << "idx = " << edge_idx
+             << ", s[" << edge_idx << "] = " << s[edge_idx]
+             << ", t[" << edge_idx << "] = " << t[edge_idx]
+             << endl << endl;
+        */
+    }
+
     g.contract(x, y, true);
 
     return dropped_indices;
@@ -245,7 +264,7 @@ bool Graph::mst()
         cout << "MST runtime: " << mst_timer.realTime() << endl;
     #endif
 
-    if (tree_edges.size() != (unsigned) this->num_vertices-1)
+    if (tree_edges.size() != (unsigned) lemon::countNodes(*lemon_graph) - 1)
     {
         // KRUSKAL RETURNED A FOREST, NOT A TREE
         return false;
@@ -288,7 +307,7 @@ bool Graph::maxst()
                  << ", Graph edge " << (*lemon_edges_inverted_index)[ tree_edges[i] ] << endl;
     #endif
 
-    if (tree_edges.size() != (unsigned) this->num_vertices-1)
+    if (tree_edges.size() != (unsigned) lemon::countNodes(*lemon_graph) - 1)
     {
         // KRUSKAL RETURNED A FOREST, NOT A TREE
         return false;
@@ -447,7 +466,7 @@ pair<bool,double> Graph::mst_probing_var(long probe_idx, bool probe_value)
     else
     {
         // check if solution after we deleted the edge is a spanning tree or forest
-        if (mst_edges.size() != (unsigned) this->num_vertices - 1)
+        if (mst_edges.size() != (unsigned) lemon::countNodes(*lemon_graph) - 1)
         {
             result_is_tree = false;
             #ifdef DEBUG_MST_PROBING
