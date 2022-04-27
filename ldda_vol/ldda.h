@@ -34,27 +34,13 @@ public:
     vector<double> bound_log;
     vector< pair<double, vector<bool> > > solution_pool; // (weight, feasible point)
 
-    vector< pair<long,bool> > fixed_vars;   // vars fixed during execution
-    IO* flush_fixes_to_instance();
-
     stringstream create_log();
 
 protected:
     IO *instance;
     KStabModel *model;
 
-    pair<bool,double> edge_deletion_bound(long);
-    pair<bool,double> edge_contraction_bound(long);
-    pair<ModelStatus,double> vertex_deletion_bound(long);
-    pair<ModelStatus,double> vertex_fix_bound(long);
-    void fix_element_at_one_in_graph_and_model(long);
-
     vector<double> original_weights;
-
-    double contracted_edges_weight;
-    vector<long> contracted_edges;
-    vector<bool> contracted_edges_mask;
-    vector<bool> removed_edges_mask;
 
     stringstream full_log;
 

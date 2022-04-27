@@ -309,7 +309,7 @@ void IO::dfs_checking_acyclic(long u,
         
         // considering only active edges
         long idx = graph->index_matrix[u][v];
-//cout << "idx = " << idx << " (u=" << u << ", v=" << v << ")" << endl << endl;
+
         if (active_edges[idx])
         {
             if (!check[v])

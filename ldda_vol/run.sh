@@ -428,7 +428,7 @@ carrabs_n100=(
 )
 
 
-for entry in "${type1_kstab_ok[@]}";
+for entry in "${carrabs_n25[@]}";
 do
     timestamp=$(date)
     $(echo "[$timestamp]  $entry" >> "$entry""_xp8.out")

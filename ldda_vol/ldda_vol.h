@@ -49,8 +49,6 @@ private:
     bool initial_multipliers_given;
 
     VOL_problem* volp;   // COIN-OR Vol problem description
-
-    void inline update_edge_weights_if_active(const vector<double> &);
 };
 
 #endif

@@ -13,6 +13,8 @@ string VOL_CONFIG_FILE = string("ldda_vol.par");
 bool USE_VOL_TIME_LIMIT = true;
 double VOL_TIME_LIMIT = 1800;
 
+int FINAL_BOUND_PRECISION = 10;   // at most 12
+
 LDDAVolume::LDDAVolume(IO *instance, KStabModel *model)
 : LDDA(instance, model)
 {
@@ -77,6 +79,11 @@ bool LDDAVolume::run_volume()
     long volp_status = volp->solve(*this, this->initial_multipliers_given);
     this->volume_runtime = this->total_time();
 
+    // prevent floating point errors by ignoring digits beyond set precision
+    double tmp = this->volume_bound * std::pow(10,FINAL_BOUND_PRECISION);
+    tmp = std::round(tmp);
+    this->volume_bound = tmp * std::pow(10, -1*FINAL_BOUND_PRECISION);
+
     if (volp_status >= 0 || time_limit_exceeded)
     {
         if (time_limit_exceeded)
@@ -115,30 +122,6 @@ bool LDDAVolume::run_volume()
     {
         cout << "volume ended prematurely" << endl;
         return false;
-    }
-}
-
-void inline LDDAVolume::update_edge_weights_if_active(const vector<double>& new_weights)
-{
-    /***
-     * An earlier execution of LDDA might have fixed some elements, so this
-     * method is a safe substitute for Graph::update_all_weights(). The 
-     * corresponding method in KStabModel is safe as variables simply have
-     * their lower and upper bounds set to some fixed value
-     */
-
-    for (long idx = 0; idx < this->instance->graph->num_edges; ++idx)
-    {
-        if ( this->contracted_edges_mask.at(idx) == true || 
-             this->removed_edges_mask.at(idx) == true )
-        {
-            // will save the new weight in vector w but not try to update the
-            // lemon weight (which would be raise an error)
-
-            this->instance->graph->w[idx] = new_weights[idx];
-        }
-        else
-            this->instance->graph->update_single_weight(idx, new_weights[idx]);
     }
 }
 
@@ -213,7 +196,7 @@ int LDDAVolume::solve_subproblem( const VOL_dvector& u,    // input: multipliers
 
     // 1. SOLVE MST(G, w-lambda^r)
 
-    update_edge_weights_if_active(mst_weights);
+    this->instance->graph->update_all_weights(mst_weights);
 
     if (instance->graph->mst() == false)
     {
@@ -223,17 +206,6 @@ int LDDAVolume::solve_subproblem( const VOL_dvector& u,    // input: multipliers
 
         this->problem_solved = true;
         return -1;
-    }
-
-    /* For separation of concerns purposes, edges contracted by LDDA (in
-     * the LEMON data structure only!) are missing in later spanning trees,
-     * so we include them here
-     */
-    for ( vector<long>::iterator it = contracted_edges.begin();
-          it != contracted_edges.end(); ++it )
-    {
-        instance->graph->mst_weight += mst_weights.at(*it);
-        instance->graph->mst_vector[*it] = true;
     }
 
     // 2. SOLVE KSTAB(\hat{G}, lambda^r)
