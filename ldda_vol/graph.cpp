@@ -88,6 +88,49 @@ void Graph::init_lemon()
 
     // volume only
     opposite_weights = new ListGraph::EdgeMap<double>(*lemon_graph);
+
+    // populate lemon graph from the edge list in this object
+    for (long idx=0; idx<num_edges; ++idx)
+    {
+        long v1 = s.at(idx);
+        long v2 = t.at(idx);
+        double weight = w.at(idx);
+
+        ListGraph::Edge e = lemon_graph->addEdge(lemon_vertices[v1], lemon_vertices[v2]);
+        lemon_edges.push_back(e);
+        (*lemon_weight)[e] = weight;
+        (*opposite_weights)[e] = (-1)*weight;
+        (*lemon_edges_inverted_index)[e] = idx;
+    }
+
+    /*
+    #ifdef DEBUG
+        cout << "~~~ LEMON says:  " << endl;
+        cout << "n = " << countNodes(*graph->lemon_graph) << endl;
+        cout << "m = " << countEdges(*graph->lemon_graph) << endl;
+
+        // iterating over edges
+        for (ListGraph::EdgeIt e_it(*graph->lemon_graph); e_it != INVALID; ++e_it)
+        {
+            cout << "edge " << graph->lemon_graph->id(e_it) << " is {"
+                 << graph->lemon_graph->id(graph->lemon_graph->u(e_it))
+                 << "," << graph->lemon_graph->id(graph->lemon_graph->v(e_it)) << "}, ";
+            cout << "inverted index = " << (*graph->lemon_edges_inverted_index)[e_it] << ", ";
+            cout << "weight = " << (*graph->lemon_weight)[e_it] << endl;
+        }
+
+        // iterating over vertices and their neighbourhood
+        for (ListGraph::NodeIt vertex(*graph->lemon_graph); vertex != INVALID; ++vertex)
+        {
+            int cnt = 0;
+            for (ListGraph::IncEdgeIt e_it(*graph->lemon_graph,vertex); e_it != INVALID; ++e_it)
+                cnt++;
+
+            cout << "deg(" << graph->lemon_graph->id(vertex) << ") = " << cnt << endl;
+        }
+        cout << "~~~ ." << endl;
+    #endif
+    */
 }
 
 void Graph::update_single_weight(long idx, double new_weight)

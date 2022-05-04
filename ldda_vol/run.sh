@@ -51,6 +51,36 @@ type1_kstab_ok=(
 "../input/zhang-instances/z200-800-3196.gcc  20941.5*"   
 )
 
+zhang_type2=( 
+"../input/zhang-instances/z50-200-type2-3903.gcc      1636"
+"../input/zhang-instances/z50-200-type2-4877.gcc      2043"
+"../input/zhang-instances/z50-200-type2-5864.gcc      2338"
+"../input/zhang-instances/z100-300-type2-8609.gcc     7434"
+"../input/zhang-instances/z100-300-type2-10686.gcc    7968"
+"../input/zhang-instances/z100-300-type2-12761.gcc    8166"
+"../input/zhang-instances/z100-500-type2-24740.gcc    12652"
+"../input/zhang-instances/z100-500-type2-30886.gcc    11232"
+"../input/zhang-instances/z100-500-type2-36827.gcc    11481"
+"../input/zhang-instances/z200-400-13660.gcc          17728"
+"../input/zhang-instances/z200-400-17089.gcc          18617"
+"../input/zhang-instances/z200-400-20469.gcc          19140"
+"../input/zhang-instances/z200-600-34504.gcc          20716"
+"../input/zhang-instances/z200-600-42860.gcc          18025"
+"../input/zhang-instances/z200-600-50984.gcc          20864"
+"../input/zhang-instances/z200-800-62625.gcc          39895"
+"../input/zhang-instances/z200-800-78387.gcc          37671"
+"../input/zhang-instances/z200-800-93978.gcc          38798"
+"../input/zhang-instances/z300-600-31000.gcc          43721"
+"../input/zhang-instances/z300-600-38216.gcc          44267"
+"../input/zhang-instances/z300-600-45310.gcc          43071"
+"../input/zhang-instances/z300-800-59600.gcc          43125"
+"../input/zhang-instances/z300-800-74500.gcc          42292"
+"../input/zhang-instances/z300-800-89300.gcc          44114"
+"../input/zhang-instances/z300-1000-96590.gcc         71562"
+"../input/zhang-instances/z300-1000-120500.gcc        76345"
+"../input/zhang-instances/z300-1000-144090.gcc        78880"
+)
+
 carrabs_all=( 
 "../input/carrabs-et-alia/CMST_25_60_18_1.cms       347"
 "../input/carrabs-et-alia/CMST_25_60_18_7.cms       389"
@@ -428,6 +458,19 @@ carrabs_n100=(
 )
 
 
+# for entry in "${zhang_type2[@]}";
+# do
+#     timestamp=$(date)
+#     $(echo "[$timestamp]  $entry" >> "summary_xp8.out")
+#     echo "[$timestamp]  $entry"
+
+#     output=$(./main $entry >> "summary_xp8.out")
+#     echo "$output"
+
+#     timestamp=$(date)
+#     $(echo -e "[$timestamp]  done\n" >> "summary_xp8.out")
+# done
+
 for entry in "${carrabs_n25[@]}";
 do
     timestamp=$(date)
@@ -438,5 +481,5 @@ do
     echo "$output"
 
     timestamp=$(date)
-    $(echo "[$timestamp]  done" >> "$entry""_xp8.out")
+    $(echo -e "[$timestamp]  done\n" >> "$entry""_xp8.out")
 done

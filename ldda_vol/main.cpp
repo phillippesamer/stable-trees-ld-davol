@@ -23,6 +23,7 @@
 using namespace std;
 
 // execution switches
+bool RUN_PREPROCESSING = true;
 bool RUN_LDDA = true;
 bool RUN_VOL = true;
 bool INITIALIZE_VOL_FROM_LDDA = true;
@@ -34,7 +35,7 @@ bool WRITE_LDDA_LOG_FILE = true;
 
 bool WRITE_XP_FILE = true;
 bool WRITE_XP_SECTION_SIMPLE_BOUNDS = true;
-bool WRITE_XP_SECTION_LDDA_COLUMNS = false;
+bool WRITE_XP_SECTION_LDDA_COLUMNS = true;
 bool WRITE_XP_SECTION_VOL_COLUMNS = true;
 bool WRITE_XP_VOL_TIME_INCLUDING_LDDA = true;
 bool WRITE_XP_ROUNDING_BOUNDS_UP = true;
@@ -55,28 +56,99 @@ int main(int argc, char **argv)
     IO* instance = new IO();
     bool instance_opt_given = (argc == 3);
 
-    // parse given input file and look for errors in it
-    if (instance->parse_input_file(string(argv[1])) == false)
+    // 0. PARSE INPUT FILE AND RUN PREPROCESSING ALGORITHM
+    if (instance->parse_input_file(string(argv[1]), RUN_PREPROCESSING) == false)
     {
         cout << "unable to parse input file" << endl;
         delete instance;
         return 0;
     }
 
-    // 0. PREPROCESSING
-    /*
-    if (instance->preprocess() == false)
+    if (instance->problem_solved || instance->problem_infeasible)
     {
-        // problem solved with preprocessing algorithm
+        if (instance->problem_solved)
+        {
+            instance->run_mst();
+            cout << "mst weight: " << instance->get_mst_weight() + instance->objective_offset
+                 << " (runtime " << fixed << instance->get_mst_runtime() << ")" << endl;
+        }
 
-        // TO DO: PROPER OUTPUT FOR XP_FILE
+        // output for xp file
+        stringstream table_row;
+        if (WRITE_XP_FILE)
+        {
+            table_row << left;
+            table_row << setw(30) << instance->instance_id_trimmed;
+            table_row << setw(5) << "  &  ";
 
-        cout << "preprocessing solved the problem -- TO DO: improve output for xp_file" << endl;
+            if (instance_opt_given)
+                table_row << setw(10) << argv[2];
+            else
+                table_row << setw(10) << "";
+            table_row << setw(6) << "  &&  ";
+
+            if (WRITE_XP_SECTION_SIMPLE_BOUNDS)
+            {
+                table_row << setw(25) << "";
+                table_row << setw(5) << "  &  ";
+                table_row << setw(10) << "";
+                table_row << setw(6) << "  &&  ";
+                if (instance->problem_solved)
+                {
+                    table_row << setw(10) << fixed << setprecision(0) << instance->get_mst_weight() + instance->objective_offset;
+                    table_row << setw(5) << "  &  ";
+                    table_row << setw(10) << fixed << setprecision(1) << instance->get_mst_runtime() + instance->preprocessing_runtime;
+                }
+                else
+                {
+                    table_row << setw(10) << "x";
+                    table_row << setw(5) << "  &  ";
+                    table_row << setw(10) << fixed << setprecision(1) << instance->preprocessing_runtime;
+                }
+                table_row << setw(6) << "  &&  ";
+                table_row << setw(10) << "";
+                table_row << setw(5) << "  &  ";
+                table_row << setw(10) << "";
+                table_row << setw(6) << "  &&  ";
+            }
+
+            if (WRITE_XP_SECTION_LDDA_COLUMNS)
+            {
+                table_row << setw(10) << " - ";
+                table_row << setw(5) << "  &  ";
+                table_row << setw(10) << " - ";
+                table_row << setw(6) << "  &&  ";
+            }
+
+            if (WRITE_XP_SECTION_VOL_COLUMNS)
+            {
+                table_row << setw(10) << " - ";
+                table_row << setw(5) << "  &  ";
+                table_row << setw(10) << " - ";
+                table_row << setw(5) << "  &  ";
+                table_row << setw(10) << " - ";
+                table_row << setw(5) << "  &  ";
+                table_row << setw(10) << "   \\\\  ";
+            }
+
+            table_row << setw(5) << endl;
+
+            ofstream xpfile(XP_FILE_NAME.c_str(), ofstream::app);
+            if (xpfile.is_open())
+            {
+                xpfile << table_row.str();
+                xpfile.close();
+            }
+            else
+            {
+                cout << "ERROR: unable to write dat file; dumping to screen:" << endl;
+                cout << table_row.str();
+            }
+        }
 
         delete instance;
         return 0;
     }
-    */
 
     // if running heuristics in volume: give primal bound from a max-weight mst
     // instance->run_maxst();
@@ -101,22 +173,23 @@ int main(int argc, char **argv)
         model->solve(true);
 
         double lp_bound_for_xp = WRITE_XP_ROUNDING_BOUNDS_UP ? 
-            ceil(lpr_model->lp_bound) : lpr_model->lp_bound;
-        double kstab_bound_for_xp = model->solution_weight;
-        double mst_bound_for_xp = instance->get_mst_weight();
+            ceil(lpr_model->lp_bound + instance->objective_offset) :
+            lpr_model->lp_bound + instance->objective_offset;
+        double kstab_bound_for_xp = model->solution_weight + instance->objective_offset;
+        double mst_bound_for_xp = instance->get_mst_weight() + instance->objective_offset;
 
         cout << "_____________________________________________________________________________" << endl << endl;
 
-        cout << "kstab bound: " << model->solution_dualbound
+        cout << "kstab bound: " << model->solution_dualbound + instance->objective_offset
              << " (runtime " << fixed << model->solution_runtime << ")";
         if (model->solution_status != AT_OPTIMUM)
             cout << " *** NOT OPTIMAL ***";
         cout << endl;
 
-        cout << "mst bound: " << instance->get_mst_weight()
+        cout << "mst bound: " << instance->get_mst_weight() + instance->objective_offset
              << " (runtime " << fixed << instance->get_mst_runtime() << ")" << endl;
 
-        cout << "lp bound: " << lpr_model->lp_bound
+        cout << "lp bound: " << lpr_model->lp_bound + instance->objective_offset
              << " (" << lpr_model->lp_passes << " passes,"
              << " runtime " << fixed << lpr_model->lp_runtime << ")" << endl;
         cout << "_____________________________________________________________________________" << endl << endl;
@@ -131,24 +204,26 @@ int main(int argc, char **argv)
 
             if (instance_opt_given)
                 table_row << setw(10) << argv[2];
+            else
+                table_row << setw(10) << "";
             table_row << setw(6) << "  &&  ";
 
             if (WRITE_XP_SECTION_SIMPLE_BOUNDS)
             {
                 if (model->solution_status == AT_OPTIMUM)
-                    table_row << setw(25) << model->solution_weight;
+                    table_row << setw(25) << model->solution_weight + instance->objective_offset;
                 else if (model->solution_status == IS_INFEASIBLE)
                     table_row << setw(25) << "x";
                 else
                 {
                     stringstream tmp_str;
-                    tmp_str << model->solution_weight << " ?";
+                    tmp_str << model->solution_weight + instance->objective_offset << " ?";
                     table_row << setw(25) << tmp_str.str();
                 }
                 table_row << setw(5) << "  &  ";
                 table_row << setw(10) << fixed << setprecision(1) << model->solution_runtime;
                 table_row << setw(6) << "  &&  ";
-                table_row << setw(10) << fixed << setprecision(0) << instance->get_mst_weight();
+                table_row << setw(10) << fixed << setprecision(0) << instance->get_mst_weight() + instance->objective_offset;
                 table_row << setw(5) << "  &  ";
                 table_row << setw(10) << fixed << setprecision(1) << instance->get_mst_runtime();
                 table_row << setw(6) << "  &&  ";
@@ -159,12 +234,15 @@ int main(int argc, char **argv)
             }
         }
 
-
         delete lpr_model;
 
         if (model->solution_status != AT_OPTIMUM)
         {
-            // kstab model could not be solved to optimality within time limit
+            /***
+             * Either the kstab model could not be solved to optimality within
+             * the time limit, or the preprocessing algorithm solved the problem
+             * (proved infeasibility or removed all conflicts)
+             */
 
             if (WRITE_XP_FILE)
             {
@@ -203,7 +281,7 @@ int main(int argc, char **argv)
 
                 cout << endl << "ldda bound: ";
                 if (ldda_complete)
-                    cout << lagrangean->bound_log.back();
+                    cout << lagrangean->bound_log.back() + instance->objective_offset;
                 else if (!ldda_complete && lagrangean->problem_solved)   // infeasible
                     cout << " x ";
                 else
@@ -211,7 +289,8 @@ int main(int argc, char **argv)
                 cout << " (runtime " << fixed << lagrangean->runtime << ")" << endl << endl;
 
                 double ldda_bound_for_xp = WRITE_XP_ROUNDING_BOUNDS_UP ?
-                    ceil(lagrangean->bound_log.back()) : lagrangean->bound_log.back();
+                    ceil(lagrangean->bound_log.back() + instance->objective_offset) : 
+                    lagrangean->bound_log.back() + instance->objective_offset;
 
                 if (WRITE_XP_TAKING_MAX_OVER_KSTAB_MST_AND_LDDA_VOL)
                 {
@@ -287,7 +366,7 @@ int main(int argc, char **argv)
 
                     cout << endl << "volume bound: ";
                     if (volume_complete)
-                        cout << lagrangean->volume_bound;
+                        cout << lagrangean->volume_bound + instance->objective_offset;
                     else if (!volume_complete && lagrangean->problem_solved)   // infeasible
                         cout << " x ";
                     else
@@ -295,7 +374,8 @@ int main(int argc, char **argv)
                     cout << " (" << lagrangean->volume_iterations << " iterations, runtime " << fixed << lagrangean->volume_runtime << ")" << endl << endl;
 
                     double vol_bound_for_xp = WRITE_XP_ROUNDING_BOUNDS_UP ?
-                        ceil(lagrangean->volume_bound) : lagrangean->volume_bound;
+                        ceil(lagrangean->volume_bound + instance->objective_offset) : 
+                        lagrangean->volume_bound + instance->objective_offset;
 
                     if (WRITE_XP_TAKING_MAX_OVER_KSTAB_MST_AND_LDDA_VOL)
                     {
