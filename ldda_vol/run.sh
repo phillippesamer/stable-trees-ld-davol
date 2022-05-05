@@ -458,28 +458,28 @@ carrabs_n100=(
 )
 
 
-# for entry in "${zhang_type2[@]}";
-# do
-#     timestamp=$(date)
-#     $(echo "[$timestamp]  $entry" >> "summary_xp8.out")
-#     echo "[$timestamp]  $entry"
-
-#     output=$(./main $entry >> "summary_xp8.out")
-#     echo "$output"
-
-#     timestamp=$(date)
-#     $(echo -e "[$timestamp]  done\n" >> "summary_xp8.out")
-# done
-
 for entry in "${carrabs_n25[@]}";
 do
     timestamp=$(date)
-    $(echo "[$timestamp]  $entry" >> "$entry""_xp8.out")
+    $(echo "[$timestamp]  $entry" >> "summary_xp8.out")
     echo "[$timestamp]  $entry"
 
-    output=$(./main $entry >> "$entry""_xp8.out")
+    output=$(time ./main $entry >> "summary_xp8.out")
     echo "$output"
 
     timestamp=$(date)
-    $(echo -e "[$timestamp]  done\n" >> "$entry""_xp8.out")
+    $(echo -e "[$timestamp]  done\n" >> "summary_xp8.out")
 done
+
+# for entry in "${carrabs_n25[@]}";
+# do
+#     timestamp=$(date)
+#     $(echo "[$timestamp]  $entry" >> "$entry""_xp8.out")
+#     echo "[$timestamp]  $entry"
+
+#     output=$(./main $entry >> "$entry""_xp8.out")
+#     echo "$output"
+
+#     timestamp=$(date)
+#     $(echo -e "[$timestamp]  done\n" >> "$entry""_xp8.out")
+# done

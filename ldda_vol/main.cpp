@@ -24,8 +24,8 @@ using namespace std;
 
 // execution switches
 bool RUN_PREPROCESSING = true;
-bool RUN_LDDA = true;
-bool RUN_VOL = true;
+bool RUN_LDDA = false;                      // TO DO: return this switch to true
+bool RUN_VOL = false;                       // TO DO: return this switch to true
 bool INITIALIZE_VOL_FROM_LDDA = true;
 
 double RUN_KSTAB_WITH_TIME_LIMIT = 1800;

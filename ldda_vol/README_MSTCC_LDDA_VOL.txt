@@ -1,4 +1,24 @@
 -------------------------------------------------------------------------------
+-- To get COIN-OR::LEMON:
+
+download lemon-1.3.1 source code at https://lemon.cs.elte.hu/trac/lemon
+
+unpack the file (e.g. on /opt) and open a terminal on that directory
+
+mkdir build
+
+cd build
+
+cmake ../
+
+make
+
+make check
+
+[optional] sudo make install
+
+
+-------------------------------------------------------------------------------
 -- To get COIN-OR::Vol:
 
 git clone https://github.com/coin-or/Vol 

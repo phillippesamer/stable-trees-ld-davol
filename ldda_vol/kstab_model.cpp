@@ -1,9 +1,14 @@
 #include "kstab_model.h"
 
+// algorithm setup switch
+bool MAXIMAL_CLIQUE_ENUMERATION = true;
+
 KStabModel::KStabModel(IO *instance)
 {
     this->instance = instance;
     this->fixed_cardinality = instance->graph->num_vertices-1;
+    this->clique_counter = 0;
+    this->clique_sizes = map<long,long>();
 
     this->solution_weight = numeric_limits<double>::max();
     this->solution_dualbound = numeric_limits<double>::max();
@@ -62,22 +67,170 @@ void KStabModel::create_constraints()
     cname << "C1_fixed_cardinality";
     model->addConstr(fix_card == this->fixed_cardinality, cname.str());
 
-    // 2. EDGE INEQUALITIES
-    for (long e=0; e < instance->num_conflicts; e++)
+    if (MAXIMAL_CLIQUE_ENUMERATION)
     {
-        long u = instance->conflicts[e].first;
-        long v = instance->conflicts[e].second;
+        /***
+         * 2. ADDING ALL MAXIMAL CLIQUE INEQUALITIES
+         * NB! We enumerate maximal cliques IN THE CONFLICT GRAPH! Below we
+         * define num_vertices and num_edges for the sake of clarity only!
+         */
 
-        GRBLinExpr edge_ineq = 0;
-        edge_ineq += x[u];
-        edge_ineq += x[v];
+        long num_vertices = instance->graph->num_edges;
+        long num_edges = instance->num_conflicts;
 
-        cname.str("");
-        cname << "C2_edge_" << u << "_" << v;
-        model->addConstr(edge_ineq <= 1, cname.str());
+        // optimized representation of the search tree and adjacencies in the algorithm
+        vector<bool> nodes(num_vertices, true);   // "subg" in Tomita et al. (2006)
+        vector<bool> open(num_vertices, true);    // "cand" in Tomita et al. (2006)
+
+        // adjacency matrix ("gamma" in Tomita et al. 2006)
+        this->cliques_bit_adj = vector<vector<bool> >();
+        for (long i=0; i<num_vertices; ++i)
+            this->cliques_bit_adj.push_back( vector<bool>(num_vertices,false) );
+
+        for (long c=0; c<num_edges; ++c)
+        {
+            pair<long,long> endpoints = instance->conflicts.at(c);
+            long v1 = endpoints.first;
+            long v2 = endpoints.second;
+            
+            this->cliques_bit_adj[v1][v2] = true;
+            this->cliques_bit_adj[v2][v1] = true;
+        }
+
+        // 3. run maximal cliques enumeration algorithm (Tomita et al. 2006)
+        GRBLinExpr initial_constraint = 0;
+        all_maximal_cliques(nodes, open, initial_constraint);
+
+        // done
+        this->cliques_bit_adj.clear();
+
+        cout << clique_counter << " clique inequalities added (";
+        if (clique_counter <= instance->num_conflicts)
+            cout << "LESS than the " << instance->num_conflicts << " edge inequalities)" << endl;
+        else
+            cout << "MORE than the " << instance->num_conflicts << " edge inequalities)" << endl;
+
+        cout << "clique_sizes:" << endl;
+        for (map<long,long>::iterator it = clique_sizes.begin(); it != clique_sizes.end(); ++it)
+            cout << "  " << it->second << " " << it->first << "-cliques" << endl;
+    }
+    else
+    {
+        // 2. USE SIMPLE EDGE INEQUALITIES
+        for (long e=0; e < instance->num_conflicts; e++)
+        {
+            long u = instance->conflicts[e].first;
+            long v = instance->conflicts[e].second;
+
+            GRBLinExpr edge_ineq = 0;
+            edge_ineq += x[u];
+            edge_ineq += x[v];
+
+            cname.str("");
+            cname << "C2_edge_" << u << "_" << v;
+            model->addConstr(edge_ineq <= 1, cname.str());
+        }
     }
 
     model->update();
+}
+
+void KStabModel::all_maximal_cliques(vector<bool> &nodes,
+                                     vector<bool> &open,
+                                     GRBLinExpr &current_constraint)
+{
+    /// implements the "cliques" algorithm of Tomita, Tanaka & Takahashi (2006)
+    
+    // convenience only (enumerating cliques IN THE CONFLICT GRAPH)
+    long num_vertices = instance->graph->num_edges;
+
+    // 1. finish a branch in the recursion tree if the current clique is maximal
+    bool nodes_allfalse = true;
+    vector<bool>::iterator nodes_it = nodes.begin();
+    while (nodes_it != nodes.end() && nodes_allfalse)
+    {
+        if (*nodes_it)
+            nodes_allfalse = false;
+
+        ++nodes_it;
+    }
+
+    if (nodes_allfalse)
+    {
+        unsigned len = current_constraint.size();
+
+        // no need to include the 1-cliques
+        if (len > 1)
+        {
+            this->model->addConstr(current_constraint <= 1);
+    
+            ++clique_counter;
+            this->clique_sizes[len] = clique_sizes[len] <= 0 ? 1 : clique_sizes[len] + 1;
+        }
+
+        return;
+    }
+    
+    // 2. else: we may extend the current clique. First, choose vertex u with most open neighbors
+    long max_val = -1;
+    long max_node = -1;
+
+    for (long u=0; u<num_vertices; ++u)
+    {
+        if (nodes[u])
+        {
+            // count entries in open \cap adj[u]
+            long tmp_count = 0;
+            for (long i=0; i<num_vertices; ++i)
+                if (open[i] && cliques_bit_adj[u][i])
+                    ++tmp_count;
+
+            if (tmp_count > max_val)
+            {
+                max_val = tmp_count;
+                max_node = u;
+            }
+        }
+    }
+
+    // 3. ext_u corresponds to non-neighbors of u which are still open, i.e. open - adj[u]
+    //vector<bool> ext_u(num_vertices, false);
+    vector<long> ext_u_idx;
+    for (long i=0; i<num_vertices; ++i)
+    {
+        if ( open[i] && !(cliques_bit_adj[max_node][i]) )
+        {
+            //ext_u[i] = true;
+            ext_u_idx.push_back(i);
+        }
+    }
+
+    // 4. one recursive call for each vertex through which the clique can be extended
+    for (vector<long>::iterator it = ext_u_idx.begin(); it != ext_u_idx.end(); ++it)
+    {
+        // vertex q joins the clique
+        long q = *it;
+        open[q] = false;
+
+        // copy constraint expression, and extend it with q
+        GRBLinExpr constraint_q = GRBLinExpr(current_constraint);
+        constraint_q += x[q];
+
+        // new nodes and open sets restricting to neighbors of current vertex q
+        vector<bool> nodes_q(num_vertices, false);
+        vector<bool> open_q(num_vertices, false);
+        for (long i=0; i<num_vertices; ++i)
+        {
+            if ( nodes[i] && cliques_bit_adj[q][i] )
+                nodes_q[i] = true;
+
+            if ( open[i] && cliques_bit_adj[q][i] )
+                open_q[i] = true;
+        }
+
+        // recursive call from the child node
+        all_maximal_cliques(nodes_q, open_q, constraint_q);
+    }
 }
 
 void KStabModel::create_objective()
@@ -109,6 +262,8 @@ int KStabModel::solve(bool logging)
             model->set(GRB_IntParam_OutputFlag, 0);
 
         model->optimize();
+
+        model->write("kstab.lp");
 
         return this->save_optimization_status();
     }

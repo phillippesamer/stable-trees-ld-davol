@@ -6,10 +6,17 @@ ifeq ($(UNAME_S),ii3102747)
     GRB_INCLUDE = -I$(GRB_PATH)/include/
     GRB_LINK    = -L$(GRB_PATH)/lib/ -lgurobi_g++5.2 -lgurobi91 -lm -lemon
 else
-    VOL_PATH    = /opt/volume
-    GRB_PATH    = /opt/gurobi950/linux64/
-    GRB_INCLUDE = -I$(GRB_PATH)/include/
-    GRB_LINK    = -L$(GRB_PATH)/lib/ -lgurobi_g++5.2 -lgurobi95 -lm -lemon
+    ifeq ($(UNAME_S),pingvin)
+        VOL_PATH    = /opt/Vol
+        GRB_PATH    = /opt/gurobi951/linux64/
+        GRB_INCLUDE = -I$(GRB_PATH)/include/
+        GRB_LINK    = -L$(GRB_PATH)/lib/ -lgurobi_g++5.2 -lgurobi95 -lm -lemon
+    else
+        VOL_PATH    = /opt/volume
+        GRB_PATH    = /opt/gurobi950/linux64/
+        GRB_INCLUDE = -I$(GRB_PATH)/include/
+        GRB_LINK    = -L$(GRB_PATH)/lib/ -lgurobi_g++5.2 -lgurobi95 -lm -lemon
+    endif
 endif
 
 # In this case we define DRIVER to be the name of the executable and filename

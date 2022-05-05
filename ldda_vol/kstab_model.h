@@ -69,6 +69,12 @@ protected:
     void create_constraints();
 
     int save_optimization_status();
+
+    // structures for enumerating maximal cliques in the conflict graph
+    long clique_counter;
+    map<long,long> clique_sizes;
+    vector<vector<bool> > cliques_bit_adj;
+    void all_maximal_cliques(vector<bool> &, vector<bool> &, GRBLinExpr &);
 };
 
 #endif
