@@ -43,11 +43,11 @@ make
 
 
 -------------------------------------------------------------------------------
--- To compile and run MSTCC LDDA_Vol:
+-- To compile and run LD-davola:
 
-git clone https://github.com/phillippesamer/mstcc-ldda
+git clone https://github.com/phillippesamer/stable-trees-ld-davola
 
-cd mstcc-ldda/ldda_vol/
+cd stable-trees-ld-davola
 
 edit the Makefile initial definitions of variables VOL_PATH and GRB_PATH to 
 reflect the root folder where COIN-OR::Vol and Gurobi are installed,

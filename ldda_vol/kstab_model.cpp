@@ -1,4 +1,5 @@
 #include "kstab_model.h"
+#include "kstab_cut_generator.h"
 
 // algorithm setup switch
 bool MAXIMAL_CLIQUE_ENUMERATION = true;
@@ -104,15 +105,20 @@ void KStabModel::create_constraints()
         // done
         this->cliques_bit_adj.clear();
 
-        cout << clique_counter << " clique inequalities added (";
-        if (clique_counter <= instance->num_conflicts)
-            cout << "LESS than the " << instance->num_conflicts << " edge inequalities)" << endl;
-        else
-            cout << "MORE than the " << instance->num_conflicts << " edge inequalities)" << endl;
+        cout << clique_counter << " clique inequalities added ";
+        if (clique_counter < instance->num_conflicts)
+            cout << "(LESS than the " << instance->num_conflicts << " edge inequalities)";
+        else if (clique_counter > instance->num_conflicts)
+            cout << "(MORE than the " << instance->num_conflicts << " edge inequalities)";
+        cout << endl;
 
-        cout << "clique_sizes:" << endl;
         for (map<long,long>::iterator it = clique_sizes.begin(); it != clique_sizes.end(); ++it)
-            cout << "  " << it->second << " " << it->first << "-cliques" << endl;
+        {
+            if (it->second == 1)
+                cout << setw(6) << it->second << " " << it->first << "-clique" << endl;
+            else
+                cout << setw(6) << it->second << " " << it->first << "-cliques" << endl;
+        }
     }
     else
     {
@@ -248,23 +254,55 @@ int KStabModel::solve(bool logging)
 {
     try
     {
-        // turn off all gurobi cut generators
-        //model->set(GRB_IntParam_Cuts, 0);
+        /*
+        // turn off all built-in cut generators?
+        model->set(GRB_IntParam_Cuts, 0);
 
-        // turn off gurobi presolve and heuristics
-        //model->set(GRB_IntParam_Presolve, 0);
-        //model->set(GRB_IntParam_PrePasses, 0);
-        //model->set(GRB_DoubleParam_Heuristics, 0);
+        // turn off all preprocessing and heuristics?
+        model->set(GRB_IntParam_Presolve, 0);
+        model->set(GRB_IntParam_PrePasses, 0);
+        model->set(GRB_DoubleParam_PreSOS1BigM, 0);
+        model->set(GRB_DoubleParam_PreSOS2BigM, 0);
+        model->set(GRB_IntParam_PreSparsify, 0);
+        model->set(GRB_IntParam_PreCrush, 1);
+        model->set(GRB_IntParam_DualReductions, 0);
+        model->set(GRB_IntParam_Aggregate, 0);
+
+        model->set(GRB_DoubleParam_Heuristics, 0);
+        */
 
         if (logging == true)
             model->set(GRB_IntParam_OutputFlag, 1);
         else
             model->set(GRB_IntParam_OutputFlag, 0);
 
+        // should disable presolve reductions that affect user cuts
+        model->set(GRB_IntParam_PreCrush, 1);
+
+        // must set parameter indicating presence of lazy constraints
+        //model->set(GRB_IntParam_LazyConstraints, 1);
+
+        // set callback to separate OCIs and solve IP
+        KStabCutGenerator cutgen = KStabCutGenerator(model, x, instance);
+        model->setCallback(&cutgen);
         model->optimize();
 
-        model->write("kstab.lp");
+        // additional information on oci cuts added
+        if (logging == true)
+        {
+            cout << cutgen.oci_counter << " odd-cycle inequalities added" << endl;
 
+            for (map<long,long>::iterator it = cutgen.oci_stats->oci_len.begin();
+                 it != cutgen.oci_stats->oci_len.end(); ++it)
+            {
+                if (it->second == 1)
+                    cout << setw(6) << it->second << " " << it->first << "-cycle" << endl;
+                else
+                    cout << setw(6) << it->second << " " << it->first << "-cycles" << endl;
+            }
+        }
+
+        //model->write("kstab.lp");
         return this->save_optimization_status();
     }
     catch(GRBException e)

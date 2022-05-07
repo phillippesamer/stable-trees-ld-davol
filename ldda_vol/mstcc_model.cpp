@@ -1,27 +1,21 @@
 #include "mstcc_model.h"
-#include "cut_generator.h"
+#include "mstcc_cut_generator.h"
 
 #define ORTHOGONALITY_TOL_IN_LPR 0.1
 #define SEC_VIOLATION_TOL_IN_LPR 0.0001
 #define SEC_SEPARATION_PRECISION_IN_LPR 14   // <= 14 without changing everything to long double (which gurobi ignores)
 
-// algorithm setup switches
-
-int  SEC_STRATEGY_IN_LPR = ALL_CUTS;
-bool STORE_CUT_POOL_IN_LPR = false;
-
-double TIME_LIMIT_IN_IP = 3600;
-
-// set the next 3 options to true to compute the LP relaxation faster
+// algorithm setup switches (set the first 3 options to true to compute the LP relaxation faster)
 bool USE_DEGREE_CONSTRAINTS_A_PRIORI = false;
 bool USE_FAST_FOLKLORE_CUT_IN_LPR = false;
 bool USE_FAST_INTEGER_CUT_IN_LPR = true;
+
+double TIME_LIMIT_IN_IP = 3600;
 
 StableSpanningTreeModel::StableSpanningTreeModel(IO *instance)
 : KStabModel(instance)
 {
     this->lp_bound = this->lp_runtime = -1;
-    stats = new cut_statistics();
 
     if (USE_DEGREE_CONSTRAINTS_A_PRIORI)
     {
@@ -48,7 +42,7 @@ StableSpanningTreeModel::StableSpanningTreeModel(IO *instance)
 
 StableSpanningTreeModel::~StableSpanningTreeModel()
 {
-    delete stats;
+    /// NOTHING HERE
 }
 
 int StableSpanningTreeModel::solve(bool logging)
@@ -94,7 +88,7 @@ int StableSpanningTreeModel::solve(bool logging)
         model->set(GRB_IntParam_LazyConstraints, 1);
 
         // set callback to separate SECs and solve IP
-        CutGenerator cutgen = CutGenerator(model, x, instance, stats);
+        SSTCutGenerator cutgen = SSTCutGenerator(model, x, instance);
         model->setCallback(&cutgen);
         model->optimize();
 
@@ -134,7 +128,7 @@ bool StableSpanningTreeModel::solve_lp_relax(bool logging)
             model->set(GRB_IntParam_OutputFlag, 0);
 
         // this cut generator object is used to find violated SECs only (not via gurobi's callback)
-        CutGenerator cutgen = CutGenerator(model, x, instance, stats);
+        SSTCutGenerator cutgen = SSTCutGenerator(model, x, instance);
 
         // make vars continuous
         for (long i=0; i < instance->graph->num_edges; i++)

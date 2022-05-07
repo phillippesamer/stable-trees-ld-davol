@@ -29,6 +29,7 @@ enum ModelStatus {AT_OPTIMUM, IS_INFEASIBLE, STATUS_UNKNOWN};
  * \author Phillippe Samer <phillippes@gmail.com>
  * \date 02.11.2021
  */
+
 class KStabModel
 {
 public:

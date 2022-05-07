@@ -66,7 +66,8 @@ private:
     friend class StableSpanningTreeModel;
     friend class LDDA;
     friend class LDDAVolume;
-    friend class CutGenerator;
+    friend class KStabCutGenerator;
+    friend class SSTCutGenerator;
 
     long num_vertices;
     long num_edges;

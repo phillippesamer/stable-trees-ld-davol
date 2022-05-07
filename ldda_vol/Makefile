@@ -28,7 +28,7 @@ EXE = $(DRIVER)
 
 # CHANGEME: Here is the name of all object files corresponding to the source
 #           code that you wrote in order to define the problem statement
-OBJS =  graph.o io.o kstab_model.o mstcc_model.o cut_generator.o ldda.o ldda_vol.o $(DRIVER).o
+OBJS =  graph.o io.o kstab_cut_generator.o kstab_model.o mstcc_model.o mstcc_cut_generator.o ldda.o ldda_vol.o $(DRIVER).o
 
 # CHANGEME: Additional libraries
 ADDLIBS = $(GRB_LINK)
