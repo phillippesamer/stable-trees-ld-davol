@@ -34,7 +34,6 @@
 
 class oci_statistics;
 
-
 class KStabCutGenerator: public GRBCallback
 {
 public:
@@ -63,18 +62,12 @@ protected:
     bool separate_oci(vector<GRBLinExpr> &, vector<long> &);
 };
 
-
 class oci_statistics
 {
 public:
-    map<string,int> oci_pool;           // stores cuts not to add repeated ones
-
-    vector<int> oci_diff_cuts;          // # of different cuts in each separation
-    vector<double> oci_infeas_std_dev;  // std.dev. of the amount violated    
-
-    map<long,long> oci_len;                // length of odd cycles found
+    map<long,long> oci_len;             // length of odd cycles found
+    map<string,long> oci_pool;          // optionally store cuts
 };
-
 
 /// information of a violated subtour elimination constraint
 class violated_oci
@@ -90,10 +83,10 @@ public:
     
     string toString()
     {
-        ostringstream oci_lhs;
+        stringstream oci_lhs;
         oci_lhs.str("");
-        for (vector<bool>::iterator it = coefficients.begin(); it != coefficients.end(); ++it)
-            oci_lhs << *it;
+        for (long i = 0; i<vertex_count; ++i)
+            oci_lhs << coefficients.at(i);
         return oci_lhs.str();
     }
 

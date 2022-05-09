@@ -17,7 +17,7 @@ Graph::Graph(long n, long m)
     lemon_graph_modified = false;
     num_vertices = n;
     num_edges = m;
-    mst_weight = numeric_limits<long>::max();   // flag for: mst not computed
+    mst_weight = numeric_limits<double>::max();   // flag for: mst not computed
 
     adj_list.reserve(n);
     adj_list.insert( adj_list.begin(), n, list<long>() );
@@ -47,6 +47,7 @@ Graph::~Graph()
         delete lemon_weight;
         delete lemon_edges_inverted_index;
         delete lemon_graph;
+        delete opposite_weights;
     }
 }
 
@@ -82,11 +83,57 @@ void Graph::init_lemon()
         lemon_vertices.push_back(lemon_graph->addNode());
 
     lemon_edges.reserve(num_edges);
-    lemon_weight = new ListGraph::EdgeMap<long>(*lemon_graph);
+    lemon_weight = new ListGraph::EdgeMap<double>(*lemon_graph);
     lemon_edges_inverted_index = new ListGraph::EdgeMap<long>(*lemon_graph);
+
+    // volume only
+    opposite_weights = new ListGraph::EdgeMap<double>(*lemon_graph);
+
+    // populate lemon graph from the edge list in this object
+    for (long idx=0; idx<num_edges; ++idx)
+    {
+        long v1 = s.at(idx);
+        long v2 = t.at(idx);
+        double weight = w.at(idx);
+
+        ListGraph::Edge e = lemon_graph->addEdge(lemon_vertices[v1], lemon_vertices[v2]);
+        lemon_edges.push_back(e);
+        (*lemon_weight)[e] = weight;
+        (*opposite_weights)[e] = (-1)*weight;
+        (*lemon_edges_inverted_index)[e] = idx;
+    }
+
+    /*
+    #ifdef DEBUG
+        cout << "~~~ LEMON says:  " << endl;
+        cout << "n = " << countNodes(*graph->lemon_graph) << endl;
+        cout << "m = " << countEdges(*graph->lemon_graph) << endl;
+
+        // iterating over edges
+        for (ListGraph::EdgeIt e_it(*graph->lemon_graph); e_it != INVALID; ++e_it)
+        {
+            cout << "edge " << graph->lemon_graph->id(e_it) << " is {"
+                 << graph->lemon_graph->id(graph->lemon_graph->u(e_it))
+                 << "," << graph->lemon_graph->id(graph->lemon_graph->v(e_it)) << "}, ";
+            cout << "inverted index = " << (*graph->lemon_edges_inverted_index)[e_it] << ", ";
+            cout << "weight = " << (*graph->lemon_weight)[e_it] << endl;
+        }
+
+        // iterating over vertices and their neighbourhood
+        for (ListGraph::NodeIt vertex(*graph->lemon_graph); vertex != INVALID; ++vertex)
+        {
+            int cnt = 0;
+            for (ListGraph::IncEdgeIt e_it(*graph->lemon_graph,vertex); e_it != INVALID; ++e_it)
+                cnt++;
+
+            cout << "deg(" << graph->lemon_graph->id(vertex) << ") = " << cnt << endl;
+        }
+        cout << "~~~ ." << endl;
+    #endif
+    */
 }
 
-void Graph::update_single_weight(long idx, long new_weight)
+void Graph::update_single_weight(long idx, double new_weight)
 {
     // weight in the edge list
     this->w[idx] = new_weight;
@@ -96,11 +143,11 @@ void Graph::update_single_weight(long idx, long new_weight)
     (*lemon_weight)[e] = new_weight;
 }
 
-void Graph::update_all_weights(vector<long> new_weights)
+void Graph::update_all_weights(vector<double> new_weights)
 {
     // weight in the edge list
     this->w.clear();
-    this->w = vector<long>(new_weights);
+    this->w = vector<double>(new_weights);
 
     // weight in lemon's adjacency list
     for (long i=0; i<num_edges; ++i)
@@ -181,6 +228,25 @@ vector<long> Graph::lemon_contract_edge(long contract_index)
     cout << endl;
     */
 
+    // TO DO: REDESIGN THESE OPERATIONS, AS THIS IS ERROR-PRONE, IN NEW APPLICATIONS! ONLY THE LEMON DATA-STRUCTURE IS CORRECT AFTERWARDS
+    // vertex y is deleted next, so we fix the edge list so that edges previously incident to y now incide on x
+    //cout << "contracting edge {" << vertex_1 << "," << vertex_2 << "}" << endl;
+    for (ListGraph::IncEdgeIt edge_from_y(g,y); edge_from_y != INVALID; ++edge_from_y)
+    {
+        long edge_idx = (*lemon_edges_inverted_index)[edge_from_y];
+        if (s[edge_idx] == vertex_2)
+            s[edge_idx] = vertex_1;
+        else
+            t[edge_idx] = vertex_1;
+        
+        /*
+        cout << "idx = " << edge_idx
+             << ", s[" << edge_idx << "] = " << s[edge_idx]
+             << ", t[" << edge_idx << "] = " << t[edge_idx]
+             << endl << endl;
+        */
+    }
+
     g.contract(x, y, true);
 
     return dropped_indices;
@@ -191,7 +257,7 @@ bool Graph::mst()
     /***
      * Using LEMON to calculate a minimum spanning tree via their efficient 
      * implementation of Kruskal's algorithm (actually, the efficient union-find
-     * is the game-changer). The MST cost and solution are store in this object.
+     * is the game-changer). The MST cost and solution are stored in this object.
      */
 
     #ifdef DEBUG_MST
@@ -241,7 +307,7 @@ bool Graph::mst()
         cout << "MST runtime: " << mst_timer.realTime() << endl;
     #endif
 
-    if (tree_edges.size() != (unsigned) this->num_vertices-1)
+    if (tree_edges.size() != (unsigned) lemon::countNodes(*lemon_graph) - 1)
     {
         // KRUSKAL RETURNED A FOREST, NOT A TREE
         return false;
@@ -250,7 +316,50 @@ bool Graph::mst()
         return true;
 }
 
-pair<bool,long> Graph::mst_probing_var(long probe_idx, bool probe_value)
+bool Graph::maxst()
+{
+    /***
+     * Using LEMON to calculate a maximum weight spanning tree (find MST using
+     * negative/opposite edge weights). The corresponding weight is stored in
+     * this object.
+     */
+
+    #ifdef DEBUG_MAXWEIGHTST
+        cout << "Determining an MaxWeightST in the graph with edges:" << endl;
+        for (ListGraph::EdgeIt e_it(*lemon_graph); e_it != INVALID; ++e_it)
+        {
+            cout << "edge " << lemon_graph->id(e_it) << " is {"
+                 << lemon_graph->id(lemon_graph->u(e_it)) << ","
+                 << lemon_graph->id(lemon_graph->v(e_it)) << "}, ";
+            cout << "inverted index = " << (*lemon_edges_inverted_index)[e_it] << ", ";
+            cout << "weight = " << (*opposite_weights)[e_it] << endl;
+        }
+    #endif
+
+    vector<ListGraph::Edge> tree_edges;
+    this->maxst_weight 
+        = (-1)*kruskal(*lemon_graph, *opposite_weights, back_inserter(tree_edges));
+
+    #ifdef DEBUG_MAXWEIGHTST
+        cout << "MaxWeightST weight = " << this->maxst_weight << endl;
+
+        cout << "MaxWeightST edges (in LEMON): " << endl;
+        for (unsigned i = 0; i != tree_edges.size(); ++i)
+            cout << "{" << lemon_graph->id(lemon_graph->u(tree_edges[i])) << ", "
+                 << lemon_graph->id(lemon_graph->v(tree_edges[i])) << "}"
+                 << ", Graph edge " << (*lemon_edges_inverted_index)[ tree_edges[i] ] << endl;
+    #endif
+
+    if (tree_edges.size() != (unsigned) lemon::countNodes(*lemon_graph) - 1)
+    {
+        // KRUSKAL RETURNED A FOREST, NOT A TREE
+        return false;
+    }
+    else
+        return true;
+}
+
+pair<bool,double> Graph::mst_probing_var(long probe_idx, bool probe_value)
 {
     /***
      * Returns the cost of an MST removing an edge (if probe_value = 0) or
@@ -277,7 +386,7 @@ pair<bool,long> Graph::mst_probing_var(long probe_idx, bool probe_value)
     #endif
 
     vector<ListGraph::Edge> mst_edges;
-    long mst_weight;
+    double mst_weight;
     Timer probing_timer;
     probing_timer.start();
 
@@ -308,7 +417,7 @@ pair<bool,long> Graph::mst_probing_var(long probe_idx, bool probe_value)
         copier.edgeCrossRef(edge_ref_new2old);
 
         // copy edge map
-        ListGraph::EdgeMap<long> weights_copy(graph_copy);
+        ListGraph::EdgeMap<double> weights_copy(graph_copy);
         copier.edgeMap(*this->lemon_weight, weights_copy);
 
         copier.run();   // actually executes the copy actions determined above
@@ -390,7 +499,7 @@ pair<bool,long> Graph::mst_probing_var(long probe_idx, bool probe_value)
 
     // 3. PREPARE RETURN VALUE
     bool result_is_tree = true;
-    long result_weight = mst_weight;
+    double result_weight = mst_weight;
 
     if (probe_value == true)
     {
@@ -400,7 +509,7 @@ pair<bool,long> Graph::mst_probing_var(long probe_idx, bool probe_value)
     else
     {
         // check if solution after we deleted the edge is a spanning tree or forest
-        if (mst_edges.size() != (unsigned) this->num_vertices - 1)
+        if (mst_edges.size() != (unsigned) lemon::countNodes(*lemon_graph) - 1)
         {
             result_is_tree = false;
             #ifdef DEBUG_MST_PROBING
@@ -457,7 +566,7 @@ bool Graph::lemon_test_adj(ListGraph &g, ListGraph::Node &x, ListGraph::Node &y)
 
 vector<ListGraph::Edge> 
 Graph::lemon_parallel_edges_if_contract(ListGraph &g,
-                                        ListGraph::EdgeMap<long> &w,
+                                        ListGraph::EdgeMap<double> &w,
                                         ListGraph::Node &x,
                                         ListGraph::Node &y)
 {

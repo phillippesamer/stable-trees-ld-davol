@@ -10,7 +10,9 @@ bool STORE_SEC_CUT_POOL = false;
 
 #define SEC_ORTHOGONALITY_TOL 0.1
 #define SEC_VIOLATION_TOL_IN_IP 0.0001
-#define SEC_SEPARATION_PRECISION_IN_IP 14   // <= 14 without changing everything to long double (which gurobi ignores)
+
+// at most 14 without changing everything to long double (which gurobi ignores)
+#define SEC_SEPARATION_PRECISION_IN_IP 14
 
 SSTCutGenerator::SSTCutGenerator(GRBModel *model, GRBVar *x_vars, IO *instance)
 : KStabCutGenerator(model, x_vars, instance)
@@ -446,11 +448,10 @@ bool SSTCutGenerator::separate_sec_folklore( vector<GRBLinExpr> &cuts_lhs,
                         // counting different cuts (only relevant when including all/orthogonal cuts)
                         string sec_id = sec->toString();
 
-                        if (counting_cuts[sec_id] <= 0)
+                        if (counting_cuts.count(sec_id) == 0)
                         {
                             // first time seeing this inequality
                             counting_cuts[sec_id] = 1;
-
 
                             if (SEC_STRATEGY == ALL_CUTS)
                             {
@@ -531,7 +532,7 @@ bool SSTCutGenerator::separate_sec_folklore( vector<GRBLinExpr> &cuts_lhs,
                             // counting different cuts (only relevant when including all/orthogonal cuts)
                             string sec_id = sec->toString();
 
-                            if (counting_cuts[sec_id] <= 0)
+                            if (counting_cuts.count(sec_id) == 0)
                             {
                                 // first time seeing this inequality
                                 counting_cuts[sec_id] = 1;
@@ -593,9 +594,6 @@ bool SSTCutGenerator::separate_sec_folklore( vector<GRBLinExpr> &cuts_lhs,
         #endif
         */
 
-        // counting different cuts
-        sec_stats->sec_diff_cuts.push_back(counting_cuts.size());
-        
         // 6.1 ADD MOST VIOLATED CUT, INCLUDED IN BOTH ENHANCED STRATEGIES
         GRBLinExpr violated_constraint = 0;
         
@@ -630,8 +628,10 @@ bool SSTCutGenerator::separate_sec_folklore( vector<GRBLinExpr> &cuts_lhs,
         
         if (SEC_STRATEGY == ORTHOGONAL_CUTS)
         {
-            // 6.2 ADD ANY OTHER CUT WHOSE HYPERPLANE HAS INNER PRODUCT WITH THAT
-            // OF THE MOST VIOLATED CUT CLOSE TO ZERO
+            /***
+             * 6.2 ADD ANY OTHER CUT WHOSE HYPERPLANE HAS INNER PRODUCT WITH
+             * THAT OF THE MOST VIOLATED CUT CLOSE TO ZERO
+             */
             
             // 2-norm of the vector corresponding to most violated inequality
             double norm_v1 = 0.;
@@ -712,6 +712,8 @@ bool SSTCutGenerator::separate_sec_folklore( vector<GRBLinExpr> &cuts_lhs,
     } // enhanced cut addition strategies
 
     // clean up
+    for (vector<violated_sec*>::iterator it = cuts.begin(); it != cuts.end(); ++it)
+        delete *it;
     cuts.clear();
 
     return (separated > 0);
@@ -903,7 +905,7 @@ bool SSTCutGenerator::separate_sec_classical( vector<GRBLinExpr> &cuts_lhs,
 
             string sec_id = sec->toString();
 
-            if (counting_cuts[sec_id] <= 0)
+            if (counting_cuts.count(sec_id) == 0)
             {
                 // first time seeing this inequality
                 counting_cuts[sec_id] = 1;
@@ -959,9 +961,6 @@ bool SSTCutGenerator::separate_sec_classical( vector<GRBLinExpr> &cuts_lhs,
         // the most violated inequality is given by the first cut above
         long most_violated_idx = 0;
 
-        // counting different cuts
-        sec_stats->sec_diff_cuts.push_back(counting_cuts.size());
-        
         // 6.1 ADD MOST VIOLATED CUT, INCLUDED IN BOTH ENHANCED STRATEGIES
         GRBLinExpr violated_constraint = 0;
         
@@ -1057,6 +1056,8 @@ bool SSTCutGenerator::separate_sec_classical( vector<GRBLinExpr> &cuts_lhs,
     } // enhanced cut addition strategies
 
     // clean up
+    for (vector<violated_sec*>::iterator it = cuts.begin(); it != cuts.end(); ++it)
+        delete *it;
     cuts.clear();
 
     return (separated > 0);

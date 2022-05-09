@@ -9,6 +9,7 @@
 #include "gurobi_c++.h"
 
 #include "io.h"
+#include "kstab_cut_generator.h"
 
 #define EPSILON_TOL 0.00000001
 #define ZERO_TOL 0.0001
@@ -29,6 +30,9 @@ enum ModelStatus {AT_OPTIMUM, IS_INFEASIBLE, STATUS_UNKNOWN};
  * \author Phillippe Samer <phillippes@gmail.com>
  * \date 02.11.2021
  */
+
+class KStabCutGenerator;
+
 class KStabModel
 {
 public:
@@ -36,8 +40,8 @@ public:
     virtual ~KStabModel();
     
     int solve(bool);
-    long solution_weight;
-    long solution_dualbound;
+    double solution_weight;
+    double solution_dualbound;
     vector<bool> solution_vector;
     ModelStatus solution_status;
     double solution_runtime;
@@ -45,15 +49,16 @@ public:
     double runtime();
     void set_time_limit(double);
 
-    void update_single_weight(long,long);
-    void update_all_weights(vector<long>);
+    void update_single_weight(long,double);
+    void update_all_weights(vector<double>);
 
-    pair<ModelStatus,long> probe_var(long, bool);
+    pair<ModelStatus,double> probe_var(long, bool);
 
     vector<long> fix_var(long, bool);
 
 protected:
     friend class LDDA;
+    friend class LDDAVolume;
 
     IO *instance;
     long fixed_cardinality;
@@ -66,6 +71,16 @@ protected:
     void create_objective();
     void create_variables();
     void create_constraints();
+
+    KStabCutGenerator *cutgen;
+
+    int save_optimization_status();
+
+    // structures for enumerating maximal cliques in the conflict graph
+    long clique_counter;
+    map<long,long> clique_sizes;
+    vector<vector<bool> > cliques_bit_adj;
+    void all_maximal_cliques(vector<bool> &, vector<bool> &, GRBLinExpr &);
 };
 
 #endif

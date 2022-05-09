@@ -40,34 +40,26 @@ public:
 
     void init_lemon();
 
-    void update_single_weight(long,double);
-    void update_all_weights(vector<double>);
+    void update_single_weight(long,long);
+    void update_all_weights(vector<long>);
 
     void lemon_delete_edge(long);
     vector<long> lemon_contract_edge(long);
     bool lemon_graph_modified;
 
     bool mst();
-    double mst_weight;
+    long mst_weight;
     vector<bool> mst_vector;
     double mst_runtime;
 
-    pair<bool,double> mst_probing_var(long, bool);
+    pair<bool,long> mst_probing_var(long, bool);
     double probe_runtime;
-
-    // volume only: maximum weight spanning tree primal bound for LDDA
-    bool maxst();
-    double maxst_weight;
-    vector<bool> maxst_vector;
 
 private:
     friend class IO;
     friend class KStabModel;
     friend class StableSpanningTreeModel;
     friend class LDDA;
-    friend class LDDAVolume;
-    friend class KStabCutGenerator;
-    friend class SSTCutGenerator;
 
     long num_vertices;
     long num_edges;
@@ -76,9 +68,9 @@ private:
     vector< list<long> > adj_list;
 
     // edge list
-    vector<long> s;      // terminal vertex 1
-    vector<long> t;      // terminal vertex 2
-    vector<double> w;    // edge weight
+    vector<long> s;        // terminal node 1
+    vector<long> t;        // terminal node 2
+    vector<long> w;        // edge weight
 
     // adjacency matrix storing edge indexes
     bool using_matrix;
@@ -90,19 +82,16 @@ private:
     vector<ListGraph::Node> lemon_vertices;
     vector<ListGraph::Edge> lemon_edges;
     ListGraph::EdgeMap<long> *lemon_edges_inverted_index;
-    ListGraph::EdgeMap<double> *lemon_weight;
+    ListGraph::EdgeMap<long> *lemon_weight;
 
     bool lemon_test_adj(ListGraph &, ListGraph::Node &, ListGraph::Node &);
     ListGraph::Edge lemon_test_adj_getting_edge(ListGraph &,
                                                 ListGraph::Node &,
                                                 ListGraph::Node &);
     vector<ListGraph::Edge> lemon_parallel_edges_if_contract(ListGraph &,
-                                                            ListGraph::EdgeMap<double> &,
+                                                            ListGraph::EdgeMap<long> &,
                                                             ListGraph::Node &,
                                                             ListGraph::Node &);
-
-    // volume only: negative/opposite edge weights
-    ListGraph::EdgeMap<double> *opposite_weights;
 };
 
 #endif

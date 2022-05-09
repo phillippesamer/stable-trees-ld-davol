@@ -50,16 +50,14 @@ protected:
     void dfs_checking_acyclic(long, long, vector<bool> &, long &, stack<long> &, vector< list<long> > &, bool &);
 };
 
-
 class sec_statistics
 {
 public:
-    map<string,int> pool;               // stores cuts not to add repeated ones
+    map<string,long> pool;               // optionally store cuts
 
-    vector<int> sec_diff_cuts;          // # of different cuts in each separation
-    vector<double> sec_infeas_std_dev;  // std.dev. of the amount violated    
+    vector<long> sec_diff_cuts;          // # of different cuts in each separation
+    vector<double> sec_infeas_std_dev;   // std.dev. of the amount violated    
 };
-
 
 /// information of a violated subtour elimination constraint
 class violated_sec
@@ -75,10 +73,10 @@ public:
     
     string toString()
     {
-        ostringstream sec_lhs;
+        stringstream sec_lhs;
         sec_lhs.str("");
-        for (vector<bool>::iterator it = coefficients.begin(); it != coefficients.end(); ++it)
-            sec_lhs << *it;
+        for (long i=0; i<edge_count; ++i)
+            sec_lhs << coefficients.at(i);
         return sec_lhs.str();
     }
 
@@ -96,7 +94,6 @@ public:
     double infeasibility;       // amount by which the sec is violated
     vector<bool> coefficients;  // hyperplane coefficients
 };
-
 
 bool inline sort_pairs_by_snd_val(pair<long,double> a, pair<long,double> b)
 {

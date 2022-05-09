@@ -17,9 +17,13 @@
 #include <lemon/preflow.h>
 
 using namespace lemon;
+using namespace lemon::concepts;
 
 #include "io.h"
 #include "kstab_model.h"
+
+#define SEC_VIOLATION_TOL 0.0001
+#define SEC_SEPARATION_PRECISION 14   // <= 14 without changing everything to long double
 
 /***
  * \file mstcc_model.h
@@ -34,18 +38,35 @@ using namespace lemon;
  * \date 04.12.2021
  */
 
+typedef struct
+{
+    map<string,int> pool;               // stores cuts not to add repeated ones
+
+    vector<int> sec_diff_cuts;          // # of different cuts in each separation
+    vector<double> sec_infeas_std_dev;  // std.dev. of the amount violated    
+} statistics;
+
+
 class StableSpanningTreeModel: public KStabModel
 {
 public:
     StableSpanningTreeModel(IO*);
     virtual ~StableSpanningTreeModel();
-
-    int solve(bool);             // full IP (with SEC in the ORIGINAL GRAPH)
-
-    bool solve_lp_relax(bool);   // corresponding LP relaxation
+    
+    bool solve_lp_relax(bool); // full model (with SEC in the ORIGINAL GRAPH)
     double lp_bound;
     double lp_runtime;
     long lp_passes;
+
+private:
+    friend class violated_sec;   // encapsulates a class of violated cuts
+
+    statistics *stats;
+
+    bool separate_SEC_integer(vector<GRBLinExpr> &, vector<long> &);
+    bool separate_SEC_folklore(vector<GRBLinExpr> &, vector<long> &);
+    bool separate_SEC_classical(vector<GRBLinExpr> &, vector<long> &);
+    void dfs_checking_acyclic(long, long, vector<bool> &, long &, stack<long> &, vector< list<long> > &, bool &);
 };
 
 #endif

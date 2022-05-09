@@ -2,9 +2,9 @@
 UNAME_S := $(shell uname -n)
 ifeq ($(UNAME_S),ii3102747)
     VOL_PATH    = /scratch/volume
-    GRB_PATH    = /scratch/gurobi912/linux64
+    GRB_PATH    = /scratch/gurobi951/linux64
     GRB_INCLUDE = -I$(GRB_PATH)/include/
-    GRB_LINK    = -L$(GRB_PATH)/lib/ -lgurobi_g++5.2 -lgurobi91 -lm -lemon
+    GRB_LINK    = -L$(GRB_PATH)/lib/ -lgurobi_g++5.2 -lgurobi95 -lm -lemon
 else
     ifeq ($(UNAME_S),pingvin)
         VOL_PATH    = /opt/Vol
@@ -28,7 +28,7 @@ EXE = $(DRIVER)
 
 # CHANGEME: Here is the name of all object files corresponding to the source
 #           code that you wrote in order to define the problem statement
-OBJS =  graph.o io.o kstab_cut_generator.o kstab_model.o mstcc_model.o mstcc_cut_generator.o ldda.o ldda_vol.o $(DRIVER).o
+OBJS =  graph.o io.o kstab_cut_generator.o kstab_model.o mstcc_cut_generator.o mstcc_model.o ldda.o ldda_vol.o $(DRIVER).o
 
 # CHANGEME: Additional libraries
 ADDLIBS = $(GRB_LINK)
