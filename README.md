@@ -1,4 +1,4 @@
-# LD-DAVOLA
+# LD-DAVOL
 ## Lagrangean Decomposition dual ascent + volume algorithm
 
 Lagrangean Decomposition based algorithm to compute dual bounds for minimum weight stable spanning trees in a graph - aka minimum spanning tree under conflict constraints (MSTCC) problem.
@@ -40,14 +40,14 @@ make
 ```
 
 
-### To compile and run LD-davola:
+### To compile and run LD-davol:
 
 ```
-git clone https://github.com/phillippesamer/stable-trees-ld-davola
-cd stable-trees-ld-davola
+git clone https://github.com/phillippesamer/stable-trees-ld-davol
+cd stable-trees-ld-davol
 ```
 
-One must edit the Makefile initial definitions of variables VOL_PATH and GRB_PATH to reflect the root folder where COIN-OR::Vol and Gurobi are installed, respectively. Finally, we compile and run LD-davola:
+One must edit the Makefile initial definitions of variables VOL_PATH and GRB_PATH to reflect the root folder where COIN-OR::Vol and Gurobi are installed, respectively. Finally, we compile and run LD-davol:
 
 ```
 make

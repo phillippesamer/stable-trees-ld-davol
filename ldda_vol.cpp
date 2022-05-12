@@ -11,7 +11,7 @@
 
 string VOL_CONFIG_FILE = string("ldda_vol.par");
 bool USE_VOL_TIME_LIMIT = true;
-double VOL_TIME_LIMIT = 1800;
+double VOL_TIME_LIMIT = 1800;   // actually using (3600 - ldda runtime) below
 
 int FINAL_BOUND_PRECISION = 10;   // at most 12
 
@@ -70,6 +70,10 @@ bool LDDAVolume::run_volume()
 {
     if (!this->initial_multipliers_given)
         cout << "(LDDA-)Vol: Lagrangean Decomposition bound approximation by the Volume Algorithm" << endl << endl;
+
+    // trying to ensure that total execution stays within 1h (assuming ldda had the same time limit)
+    if (this->initial_multipliers_given)
+        VOL_TIME_LIMIT = VOL_TIME_LIMIT + (VOL_TIME_LIMIT - this->runtime);
 
     this->volume_bound = numeric_limits<double>::min();
     this->time_limit_exceeded = false;

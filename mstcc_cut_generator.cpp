@@ -358,7 +358,7 @@ bool SSTCutGenerator::separate_sec_folklore( vector<GRBLinExpr> &cuts_lhs,
     
     long separated = 0;
     double most_violated = -1;
-    long most_violated_idx = -1;
+    long most_violated_idx = 0;
     vector<violated_sec*> cuts;
     
     // store how many different cuts were generated in this execution

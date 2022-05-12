@@ -23,7 +23,7 @@
 using namespace std;
 
 // execution switches
-bool RUN_PREPROCESSING = false;
+bool RUN_PREPROCESSING = true;
 bool RUN_LDDA = true;
 bool RUN_VOL = true;
 bool INITIALIZE_VOL_FROM_LDDA = true;
@@ -31,7 +31,7 @@ bool INITIALIZE_VOL_FROM_LDDA = true;
 double RUN_KSTAB_WITH_TIME_LIMIT = 1800;
 
 bool RUN_STEEPEST_ASCENT_LDDA = false;
-bool WRITE_LDDA_LOG_FILE = true;
+bool WRITE_LDDA_LOG_FILE = false;
 
 bool WRITE_XP_FILE = true;
 bool WRITE_XP_SECTION_SIMPLE_BOUNDS = true;
@@ -40,7 +40,7 @@ bool WRITE_XP_SECTION_VOL_COLUMNS = true;
 bool WRITE_XP_VOL_TIME_INCLUDING_LDDA = true;
 bool WRITE_XP_ROUNDING_BOUNDS_UP = true;
 bool WRITE_XP_TAKING_MAX_OVER_KSTAB_MST_AND_LDDA_VOL = true;
-string XP_FILE_NAME = string("xp8table.dat");
+string XP_FILE_NAME = string("xp12table.dat");
 
 string trim_zeros(double, int);
 
@@ -251,7 +251,8 @@ int main(int argc, char **argv)
                     table_row << setw(10) << " - ";
                     table_row << setw(5) << "  &  ";
                     table_row << setw(10) << " - ";
-                    table_row << setw(6) << "  &&  ";
+                    table_row << setw(10) << " - ";
+                    table_row << setw(5) << "  &&  ";
                 }
 
                 if (WRITE_XP_SECTION_VOL_COLUMNS)

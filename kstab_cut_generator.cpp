@@ -2,16 +2,15 @@
 
 /// algorithm setup switches
 
-
 bool SEPARATE_OCI = true;
+
+bool CUTS_AT_ROOT_ONLY = true;
 
 int  OCI_STRATEGY = ORTHOGONAL_CUTS;
 bool OCI_STRATEGY_SHIFT_AFTER_ROOT = true;
 int  OCI_STRATEGY_SHIFT_CHOICE = MOST_VIOLATED_CUT;
 
 bool STORE_OCI_CUT_POOL = false;
-
-bool CUTS_AT_ROOT_ONLY = false;
 
 #define OCI_ORTHOGONALITY_TOL 0.01
 #define OCI_VIOLATION_TOL_IN_IP 0
@@ -489,8 +488,8 @@ bool KStabCutGenerator::separate_oci( vector<GRBLinExpr> &cuts_lhs,
     }
 
     // auxiliary structures for storing and selecting cuts to add
-    double most_violated = 0;
-    long most_violated_idx = -1;
+    double most_violated = -1;
+    long most_violated_idx = 0;
     vector<violated_oci*> cuts;
 
     // get connected components to avoid computing sp for unconnected vertices

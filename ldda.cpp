@@ -10,7 +10,7 @@ LDDA::LDDA(IO *instance, KStabModel *model)
 {
     this->instance = instance;
     this->model = model;
-    this->bound_log = vector<double>();
+    this->bound_log = vector<double>(1, numeric_limits<double>::min());  // temporary -INF bound
     this->solution_pool = vector< pair<double, vector<bool> > >();
     this->full_log = stringstream();
     this->problem_solved = false;
@@ -33,7 +33,7 @@ LDDA::LDDA(IO *instance, KStabModel *model, vector<double> initial_multipliers)
 {
     this->instance = instance;
     this->model = model;
-    this->bound_log = vector<double>();
+    this->bound_log = vector<double>(1, numeric_limits<double>::min());  // temporary -INF bound
     this->solution_pool = vector< pair<double, vector<bool> > >();
     this->full_log = stringstream();
     this->problem_solved = false;
@@ -165,7 +165,7 @@ bool LDDA::dual_ascent(bool steepest_ascent)
 
         // now we can determine the lagrangean bound corresponding to the first multipliers
         if (iter == 1)
-            bound_log.push_back(instance->graph->mst_weight + model->solution_weight);
+            bound_log.at(0) = instance->graph->mst_weight + model->solution_weight;
 
         // 3. COLLECT SET OF INDICES OF VARS WHERE THE SOLUTIONS DON'T MATCH
 

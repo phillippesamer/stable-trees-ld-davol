@@ -12,7 +12,7 @@
 #include "kstab_cut_generator.h"
 
 #define EPSILON_TOL 0.00000001
-#define ZERO_TOL 0.0001
+#define ZERO_TOL 0.0000000001
 
 enum ModelStatus {AT_OPTIMUM, IS_INFEASIBLE, STATUS_UNKNOWN};
 
