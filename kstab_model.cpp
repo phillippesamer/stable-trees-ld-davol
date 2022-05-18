@@ -386,7 +386,7 @@ int KStabModel::save_optimization_status()
         cout << "Time limit exceeded (" << solution_runtime << ")" << endl;
         cout << "Dual bound " << this->solution_dualbound 
              << ", primal bound " << this->solution_weight 
-             << " (MIP gap " << model->get(GRB_DoubleAttr_MIPGap) << "%)" 
+             << " (MIP gap " << 100*model->get(GRB_DoubleAttr_MIPGap) << "%)" 
              << endl;
 
         return 0;

@@ -40,7 +40,7 @@ bool WRITE_XP_SECTION_VOL_COLUMNS = true;
 bool WRITE_XP_VOL_TIME_INCLUDING_LDDA = true;
 bool WRITE_XP_ROUNDING_BOUNDS_UP = true;
 bool WRITE_XP_TAKING_MAX_OVER_KSTAB_MST_AND_LDDA_VOL = true;
-string XP_FILE_NAME = string("xp12table.dat");
+string XP_FILE_NAME = string("xp14table.dat");
 
 string trim_zeros(double, int);
 

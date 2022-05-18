@@ -315,15 +315,6 @@ bool LDDA::dual_ascent(bool steepest_ascent)
                 pair<ModelStatus,double> probing_kstab = model->probe_var(current_direction, true);
                 total_kstab_time += model->runtime();
 
-                if (probing_kstab.first == STATUS_UNKNOWN)
-                {
-                    cout << "probing var y[" << current_direction << "] = 1 failed" 
-                         << " (runtime: " << model->runtime() << " s)" << endl;
-
-                    this->runtime = total_time();
-                    return false;
-                }
-
                 if (probing_kstab.first == IS_INFEASIBLE && probing_mst.first == false)
                 {
                     // a mismatching variable cannot agree in a feasible solution => infeasible instance
@@ -336,47 +327,57 @@ bool LDDA::dual_ascent(bool steepest_ascent)
                     return false;
                 }
 
-                /***
-                 * AT LEAST ONE OF THE PROBES IS FEASIBLE => PROCEED TO COMPUTE THE BOUNDS
-                 * In this case, we set the infeasible probe value to infinity, so that
-                 * an ascent in this direction is possible iff the other probe is
-                 * feasible and the bound increase (del/delta) is positive
-                 */
-
-                double del = (probing_mst.first == true) ?
-                    probing_mst.second - instance->graph->mst_weight
-                    : numeric_limits<double>::max();
-
-                double delta = (probing_kstab.first == AT_OPTIMUM) ?
-                    probing_kstab.second - model->solution_weight
-                    : numeric_limits<double>::max();
-
-                #ifdef DEBUG
-                    if (min(del,delta) < 0)
-                    {
-                        cout << "UNEXPECTED ERROR: min( delta=" << delta << ", del=" << del <<" ) < 0" << endl;
-                        this->runtime = total_time();
-                        return false;
-                    }
-                    /*
-                    else
-                        cout << "delta = " << delta << ", del = " << del << endl;
-                    */
-                #endif
-
-                if ( min(del,delta) > 0 &&
-                     min(del,delta) > chosen_bound_improvement )
+                if (probing_kstab.first == STATUS_UNKNOWN)
                 {
-                    iter_update = true;
+                    // probably a time limit exceeded in the the model probe
+                    cout << "probing var y[" << current_direction << "] = 1 failed" 
+                         << " (runtime: " << model->runtime() << " s)" << endl;
 
-                    chosen_direction = current_direction;
-                    chosen_adjustment = (-1)*min(del,delta);
-                    chosen_bound_improvement = min(del,delta);
-
-                    if (!steepest_ascent)
-                        done_with_first_ascent = true;
+                    this->runtime = total_time();
                 }
+                else
+                {
+                    /***
+                     * AT LEAST ONE OF THE PROBES IS FEASIBLE => PROCEED TO COMPUTE THE BOUNDS
+                     * In this case, we set the infeasible probe value to infinity, so that
+                     * an ascent in this direction is possible iff the other probe is
+                     * feasible and the bound increase (del/delta) is positive
+                     */
 
+                    double del = (probing_mst.first == true) ?
+                        probing_mst.second - instance->graph->mst_weight
+                        : numeric_limits<double>::max();
+
+                    double delta = (probing_kstab.first == AT_OPTIMUM) ?
+                        probing_kstab.second - model->solution_weight
+                        : numeric_limits<double>::max();
+
+                    #ifdef DEBUG
+                        if (min(del,delta) < 0)
+                        {
+                            cout << "UNEXPECTED ERROR: min( delta=" << delta << ", del=" << del <<" ) < 0" << endl;
+                            this->runtime = total_time();
+                            return false;
+                        }
+                        /*
+                        else
+                            cout << "delta = " << delta << ", del = " << del << endl;
+                        */
+                    #endif
+
+                    if ( min(del,delta) > 0 &&
+                         min(del,delta) > chosen_bound_improvement )
+                    {
+                        iter_update = true;
+
+                        chosen_direction = current_direction;
+                        chosen_adjustment = (-1)*min(del,delta);
+                        chosen_bound_improvement = min(del,delta);
+
+                        if (!steepest_ascent)
+                            done_with_first_ascent = true;
+                    }
+                }
             }
 
             // case 2: x^r_e = 0 and y^r_e = 1 (inoc2022, thm 4.2)
@@ -424,52 +425,53 @@ bool LDDA::dual_ascent(bool steepest_ascent)
                 // the call above took care of the case where the probe is infeasible
                 if (probing_kstab.first == STATUS_UNKNOWN)
                 {
+                    // probably a time limit exceeded in the the model probe
                     cout << "probing var y[" << current_direction << "] = 0 failed" 
                          << " (runtime: " << model->runtime() << " s)" << endl;
 
                     this->runtime = total_time();
-                    return false;
                 }
-
-                /***
-                 * AT LEAST ONE OF THE PROBES IS FEASIBLE => PROCEED TO COMPUTE THE BOUNDS
-                 * In this case, we set the infeasible probe value to infinity, so that
-                 * an ascent in this direction is possible iff the other probe is
-                 * feasible and the bound increase (del/delta) is positive
-                 */
-
-                double del = probing_mst.second - instance->graph->mst_weight;
-
-                double delta = (probing_kstab.first == AT_OPTIMUM) ?
-                    probing_kstab.second - model->solution_weight
-                    : numeric_limits<double>::max();
-
-                #ifdef DEBUG
-                    if (min(del,delta) < 0)
-                    {
-                        cout << "UNEXPECTED ERROR: min( delta=" << delta << ", del=" << del <<" ) < 0" << endl;
-                        this->runtime = total_time();
-                        return false;
-                    }
-                    /*
-                    else
-                        cout << "delta = " << delta << ", del = " << del << endl;
-                    */
-                #endif
-
-                if ( min(del,delta) > 0 &&
-                     min(del,delta) > chosen_bound_improvement )
+                else
                 {
-                    iter_update = true;
+                    /***
+                     * AT LEAST ONE OF THE PROBES IS FEASIBLE => PROCEED TO COMPUTE THE BOUNDS
+                     * In this case, we set the infeasible probe value to infinity, so that
+                     * an ascent in this direction is possible iff the other probe is
+                     * feasible and the bound increase (del/delta) is positive
+                     */
 
-                    chosen_direction = current_direction;
-                    chosen_adjustment = min(del,delta);
-                    chosen_bound_improvement = min(del,delta);
+                    double del = probing_mst.second - instance->graph->mst_weight;
 
-                    if (!steepest_ascent)
-                        done_with_first_ascent = true;
+                    double delta = (probing_kstab.first == AT_OPTIMUM) ?
+                        probing_kstab.second - model->solution_weight
+                        : numeric_limits<double>::max();
+
+                    #ifdef DEBUG
+                        if (min(del,delta) < 0)
+                        {
+                            cout << "UNEXPECTED ERROR: min( delta=" << delta << ", del=" << del <<" ) < 0" << endl;
+                            this->runtime = total_time();
+                            return false;
+                        }
+                        /*
+                        else
+                            cout << "delta = " << delta << ", del = " << del << endl;
+                        */
+                    #endif
+
+                    if ( min(del,delta) > 0 &&
+                         min(del,delta) > chosen_bound_improvement )
+                    {
+                        iter_update = true;
+
+                        chosen_direction = current_direction;
+                        chosen_adjustment = min(del,delta);
+                        chosen_bound_improvement = min(del,delta);
+
+                        if (!steepest_ascent)
+                            done_with_first_ascent = true;
+                    }
                 }
-
             }
 
             // done evaluating this direction (i.e. mismatching variable)

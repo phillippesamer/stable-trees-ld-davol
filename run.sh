@@ -488,15 +488,17 @@ mixed26=(
 )
 
 
-for entry in "${zhang_type1[@]}";
+for entry in "${carrabs_n100[@]}";
 do
     timestamp=$(date)
-    $(echo "[$timestamp]  $entry" >> "$entry""_xp12.out")
+    $(echo "[$timestamp]  $entry" >> "$entry""_xp13.out")
     echo "[$timestamp]  $entry"
 
-    output=$(./main $entry >> "$entry""_xp12.out" 2>&1)
+    output=$(./main $entry >> "$entry""_xp13.out" 2>&1)
     echo "$output"
 
     timestamp=$(date)
-    $(echo -e "[$timestamp]  done\n" >> "$entry""_xp12.out")
+    $(echo -e "[$timestamp]  done\n" >> "$entry""_xp13.out")
 done
+
+
