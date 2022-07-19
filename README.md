@@ -1,8 +1,10 @@
 # LD-DAVOL
 ## Lagrangean Decomposition dual ascent + volume algorithm
 
-Lagrangean Decomposition based algorithm to compute dual bounds for minimum weight stable spanning trees in a graph - aka minimum spanning tree under conflict constraints (MSTCC) problem.
+Lagrangean Decomposition based algorithm to compute dual bounds for minimum weight stable spanning trees in a graph - aka minimum spanning tree under conflict constraints (MSTCC) problem. Main references about this reformulation and the resulting algorithm design:
 
+- _Towards stronger Lagrangean bounds for stable spanning trees_. 10th International Network Optimization Conference (INOC), Aachen, Germany, 2022. Published in a volume of OpenProceedings (open access). DOI: [10.48786/inoc.2022.06 ](http://dx.doi.org/10.48786/inoc.2022.06)
+- _Polyhedral results and stronger Lagrangean bounds for stable spanning trees_. (submitted)
 
 ### To get COIN-OR::LEMON:
 
